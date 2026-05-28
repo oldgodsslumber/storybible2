@@ -598,6 +598,10 @@ function switchView(name) {
   } else if (name === "outline") {
     show(els.outlineView);
     renderOutline();
+  } else {
+    // Strip beat spine if it was rendered for the outline; switching views
+    // shouldn't leave a stale spine hanging off the outline section's DOM.
+    document.getElementById("beatSpine")?.remove();
   } else if (name === "review") {
     show(els.reviewView);
     maybeShowRefreshNudge();
@@ -934,6 +938,7 @@ function renderEditor(card) {
     typeSpecific = `
       <label>Short Description <textarea data-field="shortDescription" rows="2">${esc(f.shortDescription)}</textarea></label>
       <label>Long Description <textarea data-field="longDescription" rows="5">${esc(f.longDescription)}</textarea></label>
+      ${renderBeatPickerForScene(card)}
       ${renderMultiTagPicker(card, "characterIds", "Characters", "character")}
       ${renderMultiTagPicker(card, "locationIds",  "Locations",  "location")}
       ${renderMultiTagPicker(card, "arcIds",       "Arcs",       "arc")}
@@ -968,6 +973,30 @@ function renderEditor(card) {
       <button class="danger small archive-card">Archive</button>
     </div>
     <p class="muted small">Changes save on blur.</p>
+  `;
+}
+
+function renderBeatPickerForScene(scene) {
+  const beats = [...state.cards.values()]
+    .filter(c => c.type === "beat" && !c.archived)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  if (beats.length === 0) {
+    return `<div class="muted small">No beats yet. Add a Beat card to organize scenes under structural moments.</div>`;
+  }
+  let currentBeatId = "";
+  for (const b of beats) {
+    if ((b.fields?.relatedSceneIds || []).includes(scene.id)) {
+      currentBeatId = b.id;
+      break;
+    }
+  }
+  return `
+    <label>Beat
+      <select data-beat-picker="${scene.id}">
+        <option value=""${currentBeatId === "" ? " selected" : ""}>— No beat —</option>
+        ${beats.map(b => `<option value="${b.id}"${currentBeatId === b.id ? " selected" : ""}>${esc(b.title)}${b.fields?.structurePosition ? ` (${esc(b.fields.structurePosition)})` : ""}</option>`).join("")}
+      </select>
+    </label>
   `;
 }
 
@@ -1014,6 +1043,11 @@ function wireEditor(card) {
   });
   els.cardEditor.querySelectorAll(".tag-picker").forEach(picker => {
     picker.addEventListener("change", () => saveTagPicker(card.id, picker));
+  });
+  const beatPicker = els.cardEditor.querySelector("[data-beat-picker]");
+  beatPicker?.addEventListener("change", async () => {
+    await setSceneBeat(card.id, beatPicker.value);
+    rebuildGraphElements();
   });
   els.cardEditor.querySelector(".close-editor").addEventListener("click", hideCardEditor);
   els.cardEditor.querySelector(".archive-card").addEventListener("click", () => archiveCard(card.id));
@@ -1216,13 +1250,133 @@ function renderOutline() {
   const scenes = [...state.cards.values()]
     .filter(c => c.type === "scene" && !c.archived)
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const beats = [...state.cards.values()]
+    .filter(c => c.type === "beat" && !c.archived)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+  renderBeatSpine(beats, scenes);
+
   if (scenes.length === 0) {
     show(els.outlineEmpty);
-    els.outlineList.appendChild(makePlusButton(null, null));
+    els.outlineList.appendChild(makePlusButton(null, null, null));
     return;
   }
   hide(els.outlineEmpty);
-  els.outlineList.appendChild(makePlusButton(null, scenes[0].id));
+
+  // Map each scene to a beat: pick the first beat (by order) that claims it.
+  const sceneToBeat = new Map();
+  for (const beat of beats) {
+    for (const sid of beat.fields?.relatedSceneIds || []) {
+      if (!sceneToBeat.has(sid)) sceneToBeat.set(sid, beat.id);
+    }
+  }
+
+  // Group scenes by beat, preserving scene order within each group.
+  const grouped = new Map(); // beatId → scenes[]
+  const unassigned = [];
+  for (const s of scenes) {
+    const bid = sceneToBeat.get(s.id) || "";
+    if (bid) {
+      if (!grouped.has(bid)) grouped.set(bid, []);
+      grouped.get(bid).push(s);
+    } else {
+      unassigned.push(s);
+    }
+  }
+
+  // Render beat groups in beat order, then unassigned at the end.
+  for (const beat of beats) {
+    const group = grouped.get(beat.id) || [];
+    renderOutlineGroup(beat, group);
+  }
+  renderOutlineGroup(null, unassigned);
+}
+
+function renderBeatSpine(beats, scenes) {
+  let spine = document.getElementById("beatSpine");
+  if (!spine) {
+    spine = document.createElement("div");
+    spine.id = "beatSpine";
+    spine.className = "beat-spine";
+    els.outlineList.parentNode.insertBefore(spine, els.outlineList);
+  }
+  spine.innerHTML = "";
+  if (beats.length === 0) {
+    spine.innerHTML = `<p class="muted small">No beats yet. Add a Beat card from the Canvas to mark structural moments above your scenes.</p>`;
+    return;
+  }
+  for (const beat of beats) {
+    const count = scenes.filter(s => (beat.fields?.relatedSceneIds || []).includes(s.id)).length;
+    const card = document.createElement("button");
+    card.className = "beat-spine-card";
+    card.dataset.beatId = beat.id;
+    card.innerHTML = `
+      <div class="beat-spine-title">${esc(beat.title)}</div>
+      ${beat.fields?.structurePosition ? `<div class="beat-spine-position muted small">${esc(beat.fields.structurePosition)}</div>` : ""}
+      <div class="beat-spine-count muted small">${count} scene${count === 1 ? "" : "s"}</div>
+    `;
+    card.addEventListener("click", () => {
+      const target = els.outlineList.querySelector(`[data-beat-group="${beat.id}"]`);
+      target?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    spine.appendChild(card);
+  }
+}
+
+function renderOutlineGroup(beat, scenes) {
+  const header = document.createElement("li");
+  header.className = "outline-group-header";
+  header.dataset.beatGroup = beat ? beat.id : "unassigned";
+  if (beat) {
+    const stale = beat.fields?.summaryStale ? '<span class="stale-icon" title="Beat summary needs refresh">⚠</span>' : "";
+    header.innerHTML = `
+      <div class="outline-group-title">
+        <span class="badge beat">beat</span>
+        <strong>${esc(beat.title)}</strong>
+        ${beat.fields?.structurePosition ? `<span class="muted small">— ${esc(beat.fields.structurePosition)}</span>` : ""}
+        ${stale}
+      </div>
+      ${beat.fields?.summary || beat.fields?.description ? `<p class="muted small">${esc(beat.fields.summary || beat.fields.description)}</p>` : ""}
+    `;
+    header.addEventListener("click", e => {
+      if (e.target.closest(".drag-handle")) return;
+      switchView("graph");
+      openCardEditor(beat.id);
+    });
+  } else {
+    header.innerHTML = `<div class="outline-group-title muted small">Unassigned to any beat</div>`;
+  }
+  els.outlineList.appendChild(header);
+
+  // Drop zone for cross-beat assignment (covers the group)
+  const dropZone = document.createElement("li");
+  dropZone.className = "outline-group-dropzone";
+  dropZone.dataset.beatTarget = beat ? beat.id : "";
+  dropZone.addEventListener("dragover", e => {
+    e.preventDefault();
+    dropZone.classList.add("drop-target");
+  });
+  dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drop-target"));
+  dropZone.addEventListener("drop", async e => {
+    e.preventDefault();
+    dropZone.classList.remove("drop-target");
+    if (!dragSourceId) return;
+    await setSceneBeat(dragSourceId, beat ? beat.id : "");
+    renderOutline();
+  });
+  els.outlineList.appendChild(dropZone);
+
+  if (scenes.length === 0) {
+    const empty = document.createElement("li");
+    empty.className = "outline-group-empty muted small";
+    empty.textContent = beat
+      ? "No scenes assigned here yet — drag a scene's handle to drop it under this beat, or use the Beat dropdown in a scene editor."
+      : "All scenes are assigned to a beat.";
+    els.outlineList.appendChild(empty);
+    return;
+  }
+
+  els.outlineList.appendChild(makePlusButton(null, scenes[0].id, beat ? beat.id : null));
   for (let i = 0; i < scenes.length; i++) {
     const s = scenes[i];
     const li = document.createElement("li");
@@ -1248,23 +1402,71 @@ function renderOutline() {
     });
     els.outlineList.appendChild(li);
     const nextId = scenes[i + 1]?.id || null;
-    els.outlineList.appendChild(makePlusButton(s.id, nextId));
+    els.outlineList.appendChild(makePlusButton(s.id, nextId, beat ? beat.id : null));
   }
 }
 
-function makePlusButton(beforeSceneId, afterSceneId) {
+// Set or clear a scene's parent beat. Removes from any previous beat first,
+// then adds to the new one. Marks both beats' summaries stale because their
+// contents changed.
+async function setSceneBeat(sceneId, newBeatId) {
+  const audits = [];
+  const allBeats = [...state.cards.values()].filter(c => c.type === "beat" && !c.archived);
+  for (const beat of allBeats) {
+    const ids = beat.fields?.relatedSceneIds || [];
+    if (ids.includes(sceneId) && beat.id !== newBeatId) {
+      const newIds = ids.filter(id => id !== sceneId);
+      beat.fields.relatedSceneIds = newIds;
+      beat.fields.summaryStale = true;
+      await updateDoc(
+        doc(db, "users", state.user.uid, "projects", projectId, "cards", beat.id),
+        {
+          "fields.relatedSceneIds": newIds,
+          "fields.summaryStale": true,
+          updatedAt: serverTimestamp()
+        }
+      );
+      audits.push({ entityType: "card", entityId: beat.id, field: "relatedSceneIds", oldValue: ids, newValue: newIds });
+    }
+  }
+  if (newBeatId) {
+    const newBeat = state.cards.get(newBeatId);
+    if (newBeat && newBeat.type === "beat") {
+      const ids = newBeat.fields?.relatedSceneIds || [];
+      if (!ids.includes(sceneId)) {
+        const newIds = [...ids, sceneId];
+        newBeat.fields.relatedSceneIds = newIds;
+        newBeat.fields.summaryStale = true;
+        await updateDoc(
+          doc(db, "users", state.user.uid, "projects", projectId, "cards", newBeatId),
+          {
+            "fields.relatedSceneIds": newIds,
+            "fields.summaryStale": true,
+            updatedAt: serverTimestamp()
+          }
+        );
+        audits.push({ entityType: "card", entityId: newBeatId, field: "relatedSceneIds", oldValue: ids, newValue: newIds });
+      }
+    }
+  }
+  if (audits.length) await logAudit(state.user.uid, projectId, audits, state.project);
+  await touchProject();
+  updateRefreshNudge();
+}
+
+function makePlusButton(beforeSceneId, afterSceneId, beatId) {
   const wrap = document.createElement("li");
   wrap.className = "outline-plus";
   const btn = document.createElement("button");
   btn.className = "ghost small";
   btn.textContent = "+ Suggest scene here";
-  btn.addEventListener("click", () => handleScenePlus(beforeSceneId, afterSceneId));
+  btn.addEventListener("click", () => handleScenePlus(beforeSceneId, afterSceneId, beatId));
   wrap.appendChild(btn);
   return wrap;
 }
 
-async function handleScenePlus(beforeSceneId, afterSceneId) {
-  console.log("[scene-plus] clicked", { beforeSceneId, afterSceneId });
+async function handleScenePlus(beforeSceneId, afterSceneId, beatId) {
+  console.log("[scene-plus] clicked", { beforeSceneId, afterSceneId, beatId });
   if (!isConfigured()) {
     if (confirm("No LLM provider configured. Open Settings?")) openSettingsModal();
     return;
@@ -1278,6 +1480,8 @@ async function handleScenePlus(beforeSceneId, afterSceneId) {
     onAccept: async (edited) => {
       const position = beforeSceneId ? { afterId: beforeSceneId } : (afterSceneId ? { beforeId: afterSceneId } : null);
       const newId = await insertGeneratedScene(state, projectId, edited, position);
+      // Inherit the beat group the user dropped the + button under
+      if (beatId) await setSceneBeat(newId, beatId);
       await touchProject();
       renderOutline();
       rebuildGraphElements();

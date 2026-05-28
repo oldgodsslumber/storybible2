@@ -129,6 +129,82 @@ body { display: flex; flex-direction: column; height: 100vh; }
 .outline-item h4 { margin: 0 0 4px 0; }
 .outline-item p { margin: 0; }
 
+/* Beat spine — horizontal row of beats above the outline */
+.beat-spine {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 12px 0 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.beat-spine .muted {
+  padding: 8px 12px;
+}
+.beat-spine-card {
+  flex: 0 0 auto;
+  min-width: 140px;
+  max-width: 220px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--beat);
+  border-radius: 6px;
+  padding: 8px 12px;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+  font-family: inherit;
+}
+.beat-spine-card:hover {
+  border-color: var(--accent);
+  border-top-color: var(--beat);
+}
+.beat-spine-title { font-weight: 600; font-size: 13px; }
+.beat-spine-position { margin-top: 2px; font-style: italic; }
+.beat-spine-count { margin-top: 4px; }
+
+/* Beat group headers inside the outline list */
+.outline-group-header {
+  list-style: none;
+  background: var(--bg-elev);
+  border-left: 3px solid var(--beat);
+  border-radius: 0 6px 6px 0;
+  padding: 8px 14px;
+  margin: 14px 0 6px 0;
+  cursor: pointer;
+}
+.outline-group-header:hover { background: rgba(224,185,90,0.06); }
+.outline-group-header[data-beat-group="unassigned"] {
+  border-left-color: var(--muted);
+  cursor: default;
+}
+.outline-group-header[data-beat-group="unassigned"]:hover { background: var(--bg-elev); }
+.outline-group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.outline-group-header p { margin: 4px 0 0 0; }
+.outline-group-dropzone {
+  list-style: none;
+  height: 8px;
+  margin: 0;
+  border-radius: 4px;
+  transition: background 0.15s, height 0.15s;
+}
+.outline-group-dropzone.drop-target {
+  background: rgba(122,156,255,0.2);
+  height: 16px;
+  margin: 4px 0;
+}
+.outline-group-empty {
+  list-style: none;
+  padding: 8px 14px 8px 30px;
+  margin: 0 0 6px 0;
+  font-style: italic;
+}
+
 /* Outline + buttons */
 .outline-plus {
   list-style: none;
