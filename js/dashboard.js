@@ -120,10 +120,16 @@ async function createProject() {
     const ok = confirm(`Heads up: you haven't typed anything in the "What's your story about?" textarea.\n\nWithout idea-dump text, the LLM has nothing to extract — you'll land on an empty project. You can paste an idea dump into the side panel later and click "Parse with LLM" instead.\n\nCreate empty project anyway?`);
     if (!ok) return;
   }
+  console.log("[dashboard] currentUser:", currentUser?.uid || "(null)");
+  if (!currentUser) {
+    alert("You're not signed in. Refresh the page and sign in again.");
+    return;
+  }
   els.createProjectBtn.disabled = true;
   try {
+    console.log("[dashboard] building Firestore ref...");
     const projectsRef = collection(db, "users", currentUser.uid, "projects");
-    const docRef = await addDoc(projectsRef, {
+    const payload = {
       title,
       logline: "",
       themeText,
@@ -133,10 +139,21 @@ async function createProject() {
       auditTrail: [],
       lastRefreshAt: null,
       archived: false
-    });
+    };
+    console.log("[dashboard] calling addDoc (15s timeout if rules block)...");
+    const docRef = await Promise.race([
+      addDoc(projectsRef, payload),
+      new Promise((_, reject) => setTimeout(
+        () => reject(new Error("addDoc timed out after 15s. Most likely cause: Firestore rules aren't published. Open the Firebase Console → Firestore Database → Rules and paste in the contents of firestore.rules, then click Publish.")),
+        15000
+      ))
+    ]);
+    console.log("[dashboard] addDoc resolved with id:", docRef.id);
+    console.log("[dashboard] redirecting to project.html...");
     window.location.href = `./project.html?id=${encodeURIComponent(docRef.id)}&isNew=1`;
   } catch (err) {
-    alert("Could not create project: " + err.message);
+    console.error("[dashboard] createProject failed:", err);
+    alert("Could not create project:\n\n" + (err?.message || err));
     els.createProjectBtn.disabled = false;
   }
 }
