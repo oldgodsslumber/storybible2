@@ -327,6 +327,13 @@ function setLlmStatus(msg) {
 // --- Apply approved items to Firestore + state ---
 
 async function applyApprovedItems(approved) {
+  console.log("[apply] approved input", {
+    characters: approved?.characters?.length || 0,
+    locations:  approved?.locations?.length  || 0,
+    themes:     approved?.themes?.length     || 0,
+    updates:    approved?.updates?.length    || 0,
+    connections:approved?.connections?.length|| 0
+  });
   const nameToCardId = new Map();
   for (const c of state.cards.values()) {
     if (!c.archived) nameToCardId.set(c.title.toLowerCase(), c.id);
@@ -335,8 +342,10 @@ async function applyApprovedItems(approved) {
   const cardsCol = collection(db, "users", state.user.uid, "projects", projectId, "cards");
   const connCol  = collection(db, "users", state.user.uid, "projects", projectId, "connections");
   const auditBatch = [];
+  let added = 0;
 
   for (const ch of approved.characters || []) {
+    if (!ch.name) { console.warn("[apply] skipped character with no name", ch); continue; }
     const data = {
       type: "character",
       title: ch.name,
@@ -355,8 +364,11 @@ async function applyApprovedItems(approved) {
     state.cards.set(ref.id, { id: ref.id, ...data });
     nameToCardId.set(ch.name.toLowerCase(), ref.id);
     auditBatch.push({ entityType: "card", entityId: ref.id, field: "created", oldValue: null, newValue: { type: "character", title: ch.name, source: ch.source } });
+    added++;
+    console.log("[apply] added character", { id: ref.id, name: ch.name });
   }
   for (const l of approved.locations || []) {
+    if (!l.name) { console.warn("[apply] skipped location with no name", l); continue; }
     const data = {
       type: "location", title: l.name, archived: false,
       createdAt: serverTimestamp(), updatedAt: serverTimestamp(), order: 0,
@@ -366,8 +378,11 @@ async function applyApprovedItems(approved) {
     state.cards.set(ref.id, { id: ref.id, ...data });
     nameToCardId.set(l.name.toLowerCase(), ref.id);
     auditBatch.push({ entityType: "card", entityId: ref.id, field: "created", oldValue: null, newValue: { type: "location", title: l.name, source: l.source } });
+    added++;
+    console.log("[apply] added location", { id: ref.id, name: l.name });
   }
   for (const t of approved.themes || []) {
+    if (!t.name) { console.warn("[apply] skipped theme with no name", t); continue; }
     const data = {
       type: "theme", title: t.name, archived: false,
       createdAt: serverTimestamp(), updatedAt: serverTimestamp(), order: 0,
@@ -377,6 +392,8 @@ async function applyApprovedItems(approved) {
     state.cards.set(ref.id, { id: ref.id, ...data });
     nameToCardId.set(t.name.toLowerCase(), ref.id);
     auditBatch.push({ entityType: "card", entityId: ref.id, field: "created", oldValue: null, newValue: { type: "theme", title: t.name, source: t.source } });
+    added++;
+    console.log("[apply] added theme", { id: ref.id, name: t.name });
   }
 
   for (const u of approved.updates || []) {
@@ -427,6 +444,7 @@ async function applyApprovedItems(approved) {
     await logAudit(state.user.uid, projectId, auditBatch, state.project);
   }
   await touchProject();
+  console.log("[apply] complete", { added, totalCardsNow: state.cards.size });
   rebuildGraphElements();
   updateRefreshNudge();
 }
@@ -677,7 +695,10 @@ function initOrRefreshGraph() {
 }
 
 function rebuildGraphElements() {
-  if (!state.cy) return;
+  if (!state.cy) {
+    console.warn("[graph] rebuildGraphElements: state.cy is not initialized yet");
+    return;
+  }
   state.cy.elements().remove();
   const nodes = [];
   for (const card of state.cards.values()) {
@@ -706,8 +727,14 @@ function rebuildGraphElements() {
       }
     });
   }
+  console.log("[graph] rebuilding", { nodes: nodes.length, edges: edges.length });
   state.cy.add([...nodes, ...edges]);
+  // Cytoscape caches the container size at init. If the container was hidden
+  // or resized (e.g. while a modal was open), we need to tell it to re-measure
+  // before laying out — otherwise new nodes can render at 0,0 or off-screen.
+  state.cy.resize();
   state.cy.layout({ name: "cose", animate: false }).run();
+  state.cy.fit(undefined, 30);
 }
 
 // --- Card CRUD ---
