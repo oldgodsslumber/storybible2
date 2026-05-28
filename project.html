@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>The Writer's Assistant — Project</title>
+  <link rel="stylesheet" href="./css/shared.css" />
+  <link rel="stylesheet" href="./css/project.css" />
+  <script src="https://unpkg.com/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <a href="./index.html" class="back">← Projects</a>
+      <span id="projectTitle">…</span>
+    </div>
+    <nav class="view-tabs">
+      <button data-view="graph" class="tab active">Graph</button>
+      <button data-view="outline" class="tab">Outline</button>
+      <button data-view="review" class="tab">Review</button>
+      <button data-view="kanban" class="tab">Kanban</button>
+      <button data-view="archive" class="tab">Archive</button>
+    </nav>
+    <div class="topbar-actions">
+      <button id="refreshBtn" class="ghost small" title="Regenerate stale summaries">↻ Refresh <span id="refreshBadge" class="badge-count hidden">0</span></button>
+    </div>
+    <div class="user-area" id="userArea"></div>
+  </header>
+  <script type="module">
+    import { mountSettingsButton } from "./js/settings.js";
+    const ua = document.getElementById("userArea");
+    new MutationObserver(() => {
+      if (!ua.querySelector("button.settings-mounted") && ua.children.length > 0) {
+        mountSettingsButton(ua);
+        const last = ua.querySelector("button.ghost.small");
+        if (last) last.classList.add("settings-mounted");
+      }
+    }).observe(ua, { childList: true });
+  </script>
+
+  <main id="main">
+    <section id="loading" class="centered">
+      <p class="muted">Loading project…</p>
+    </section>
+
+    <!-- GRAPH VIEW -->
+    <section id="graphView" class="view hidden">
+      <aside class="side-panel">
+        <h3>Add Card</h3>
+        <div class="card-type-buttons">
+          <button data-type="character">+ Character</button>
+          <button data-type="scene">+ Scene</button>
+          <button data-type="theme">+ Theme</button>
+          <button data-type="location">+ Location</button>
+          <button data-type="arc">+ Arc</button>
+        </div>
+        <hr />
+        <h3>Notes</h3>
+        <textarea id="notePanel" placeholder="Dump whatever's in your head. LLM will organize it into cards." rows="8"></textarea>
+        <div class="note-actions">
+          <button id="parseNoteBtn" class="primary small">Parse with LLM</button>
+          <button id="clearNoteBtn" class="ghost small">Clear</button>
+        </div>
+        <p id="llmStatus" class="muted small"></p>
+      </aside>
+      <div class="graph-area">
+        <div id="cy"></div>
+        <div id="cardEditor" class="card-editor hidden"></div>
+      </div>
+    </section>
+
+    <!-- OUTLINE VIEW -->
+    <section id="outlineView" class="view hidden">
+      <div class="outline-header">
+        <h2>Outline</h2>
+        <p class="muted">Drag-to-reorder and + scene generation arrive in M3.</p>
+      </div>
+      <ol id="outlineList" class="outline-list"></ol>
+      <p id="outlineEmpty" class="muted hidden">No scene cards yet. Add one from the Graph view.</p>
+    </section>
+
+    <!-- REVIEW VIEW -->
+    <section id="reviewView" class="view hidden">
+      <h2>Review Panel</h2>
+      <p class="muted">Character arc review, synopsis, arc summary, and theme coherence check arrive in M4.</p>
+    </section>
+
+    <!-- KANBAN VIEW -->
+    <section id="kanbanView" class="view hidden">
+      <div class="kanban-header">
+        <h2>Production Kanban</h2>
+        <p class="muted small">Drag scene cards between stages. Tracks production status separately from the story bible.</p>
+      </div>
+      <div id="kanbanBoard" class="kanban-board"></div>
+    </section>
+
+    <!-- ARCHIVE VIEW -->
+    <section id="archiveView" class="view hidden">
+      <h2>Archive</h2>
+      <p class="muted">Soft-deleted cards. Restore brings them back to the graph.</p>
+      <ul id="archiveList" class="archive-list"></ul>
+      <p id="archiveEmpty" class="muted hidden">Nothing archived.</p>
+    </section>
+  </main>
+
+  <script type="module" src="./js/project.js"></script>
+</body>
+</html>

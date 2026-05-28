@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>The Writer's Assistant — Dashboard</title>
+  <link rel="stylesheet" href="./css/shared.css" />
+  <link rel="stylesheet" href="./css/dashboard.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">The Writer's Assistant</div>
+    <div class="user-area" id="userArea"></div>
+  </header>
+  <script type="module">
+    import { mountSettingsButton } from "./js/settings.js";
+    // Mount once auth area is populated by dashboard.js — observe.
+    const ua = document.getElementById("userArea");
+    new MutationObserver(() => {
+      if (!ua.querySelector("button.ghost.settings-mounted") && ua.children.length > 0) {
+        mountSettingsButton(ua);
+        const last = ua.querySelector("button.ghost.small");
+        if (last) last.classList.add("settings-mounted");
+      }
+    }).observe(ua, { childList: true });
+  </script>
+
+  <main id="main">
+    <section id="signedOut" class="centered hidden">
+      <h1>The Writer's Assistant</h1>
+      <p class="muted">A living creative tool for writers who think deeply about their stories.</p>
+      <button id="signInBtn" class="primary">Sign in with Google</button>
+    </section>
+
+    <section id="loading" class="centered">
+      <p class="muted">Loading…</p>
+    </section>
+
+    <section id="dashboard" class="hidden">
+      <div class="dashboard-header">
+        <h2>Your Projects</h2>
+        <button id="newProjectBtn" class="primary">+ New Project</button>
+      </div>
+      <ul id="projectList" class="project-list"></ul>
+      <p id="emptyState" class="muted hidden">No projects yet. Start one above.</p>
+    </section>
+
+    <section id="newProjectView" class="centered hidden">
+      <h2>What's your story about?</h2>
+      <p class="muted">A theme. A character. A fragment. Whatever you've got.</p>
+      <textarea id="ideaDump" placeholder="Type or paste anything…" rows="10"></textarea>
+      <div class="row">
+        <input id="projectTitle" type="text" placeholder="Project title (required)" />
+      </div>
+      <div class="row">
+        <button id="createProjectBtn" class="primary">Create Project</button>
+        <button id="cancelNewProjectBtn" class="ghost">Cancel</button>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="./js/dashboard.js"></script>
+</body>
+</html>
