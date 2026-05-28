@@ -1,6 +1,7 @@
 import {
   auth, db, signIn, onAuthChange, renderUserArea, show, hide, formatDate
 } from "./shared.js";
+import { mountLlmConfigBanner } from "./settings.js";
 import {
   collection, doc, getDocs, addDoc, query, where, orderBy, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
@@ -47,6 +48,7 @@ onAuthChange(async user => {
     return;
   }
   hide(els.signedOut);
+  mountLlmConfigBanner();
   await goDashboard();
 });
 

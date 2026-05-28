@@ -20,6 +20,7 @@ import {
 import { renderOracle } from "./oracle.js";
 import { openStorySettingsModal, getColumnsForProject, defaultColumnId } from "./story-settings.js";
 import { provideExtractionStateRef } from "./extraction.js";
+import { mountLlmConfigBanner } from "./settings.js";
 
 const REFRESH_NUDGE_THRESHOLD = 60;
 
@@ -83,6 +84,7 @@ onAuthChange(async user => {
     return;
   }
   projectLoaded = true;
+  mountLlmConfigBanner();
   await loadProject();
 });
 

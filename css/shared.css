@@ -359,6 +359,21 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
   to { transform: rotate(360deg); }
 }
 
+/* LLM config banner — top of page when no provider is configured */
+.llm-config-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 24px;
+  background: rgba(224,185,90,0.12);
+  border-bottom: 1px solid var(--warn);
+  color: var(--text);
+  font-size: 14px;
+}
+.llm-config-banner.hidden { display: none; }
+.llm-config-banner-msg { flex: 1; }
+.llm-config-banner-btn { flex-shrink: 0; }
+
 /* Refresh / progress */
 .progress-bar {
   width: 100%;

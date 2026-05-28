@@ -1,7 +1,9 @@
 // Settings modal — open from any page. Persists LLM config to localStorage.
-import { getSettings, saveSettings, callLLM } from "./llm.js";
+import { getSettings, saveSettings, callLLM, isConfigured } from "./llm.js";
 
 const NOTICE_KEY = "storybible.llm.notice.acknowledged";
+const FIRST_VISIT_PROMPT_KEY = "storybible.llm.config-prompt.shown";
+const SETTINGS_SAVED_EVENT = "storybible:llm-settings-saved";
 
 export function openSettingsModal() {
   const s = getSettings();
@@ -153,8 +155,51 @@ export function openSettingsModal() {
       alert("Heads up: your API key and prompts are sent directly from this browser to the provider you chose. Nothing routes through a server we control.");
       localStorage.setItem(NOTICE_KEY, "1");
     }
+    document.dispatchEvent(new CustomEvent(SETTINGS_SAVED_EVENT, { detail: form }));
     close();
   });
+}
+
+// Banner shown at the top of the page whenever no LLM provider is
+// configured. Caller is responsible for mounting it after auth succeeds
+// (we don't want this showing on the signed-out splash). On the first
+// sign-in where the user has never been prompted, also auto-opens the
+// Settings modal so the configure-your-LLM step isn't easy to miss.
+export function mountLlmConfigBanner() {
+  let banner = document.getElementById("llmConfigBanner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "llmConfigBanner";
+    banner.className = "llm-config-banner hidden";
+    const main = document.getElementById("main");
+    if (main && main.parentNode) main.parentNode.insertBefore(banner, main);
+    else document.body.insertBefore(banner, document.body.firstChild);
+  }
+
+  function update() {
+    if (isConfigured()) {
+      banner.classList.add("hidden");
+      banner.innerHTML = "";
+      return;
+    }
+    banner.classList.remove("hidden");
+    banner.innerHTML = `
+      <span class="llm-config-banner-msg">⚠ Connect an LLM to enable note processing, scene generation, and reviews. Without one, the story bible still works as a manual card editor — but the assistant features are disabled.</span>
+      <button class="primary small llm-config-banner-btn">Configure now</button>
+    `;
+    banner.querySelector(".llm-config-banner-btn").addEventListener("click", openSettingsModal);
+  }
+
+  update();
+  document.addEventListener(SETTINGS_SAVED_EVENT, update);
+
+  // First-visit auto-open: if the user has never seen this prompt before
+  // AND no LLM is configured, pop the Settings modal so they're walked
+  // straight to it. After this once, the banner alone handles it.
+  if (!isConfigured() && !localStorage.getItem(FIRST_VISIT_PROMPT_KEY)) {
+    localStorage.setItem(FIRST_VISIT_PROMPT_KEY, "1");
+    setTimeout(() => openSettingsModal(), 250);
+  }
 }
 
 export function mountSettingsButton(container) {
