@@ -1,5 +1,5 @@
 import {
-  auth, db, onAuthChange, renderUserArea, show, hide, blankFieldsForType, CARD_TYPES, KANBAN_STAGES
+  auth, db, onAuthChange, renderUserArea, show, hide, blankFieldsForType, CARD_TYPES, KANBAN_STAGES, openBusyOverlay
 } from "./shared.js";
 import {
   doc, getDoc, getDocs, collection, addDoc, updateDoc, deleteDoc, serverTimestamp
@@ -35,6 +35,7 @@ const els = {
   notePanel: document.getElementById("notePanel"),
   parseNoteBtn: document.getElementById("parseNoteBtn"),
   clearNoteBtn: document.getElementById("clearNoteBtn"),
+  rerunExtractBtn: document.getElementById("rerunExtractBtn"),
   llmStatus: document.getElementById("llmStatus"),
   outlineList: document.getElementById("outlineList"),
   outlineEmpty: document.getElementById("outlineEmpty"),
@@ -79,6 +80,7 @@ els.cardTypeButtons.forEach(b => b.addEventListener("click", () => createCard(b.
 els.parseNoteBtn?.addEventListener("click", parseNoteHandler);
 els.clearNoteBtn?.addEventListener("click", () => { els.notePanel.value = ""; });
 els.refreshBtn?.addEventListener("click", handleRefresh);
+els.rerunExtractBtn?.addEventListener("click", () => runIdeaDumpExtractionNow());
 
 provideStateRef(state);
 
@@ -142,6 +144,9 @@ async function loadProject() {
   hide(els.loading);
   switchView("graph");
   updateRefreshNudge();
+  if ((state.project.themeText || "").trim() && els.rerunExtractBtn) {
+    els.rerunExtractBtn.classList.remove("hidden");
+  }
   if (isNewProject) {
     history.replaceState({}, "", `./project.html?id=${encodeURIComponent(projectId)}`);
     await maybeRunIdeaDumpExtraction();
@@ -152,38 +157,74 @@ async function maybeRunIdeaDumpExtraction() {
   const themeText = (state.project.themeText || "").trim();
   if (!themeText) return;
   if (!isConfigured()) {
-    const wantConfigure = confirm("You have an idea dump but no LLM provider is configured.\n\nConfigure one now to extract characters, locations, and themes?\n\nCancel = work manually for now (you can run extraction later from Settings).");
+    const wantConfigure = confirm("You have an idea dump but no LLM provider is configured.\n\nConfigure one now to extract characters, locations, and themes?\n\nCancel = work manually for now (you can run extraction later from the side panel.)");
     if (wantConfigure) openSettingsModal();
     return;
   }
-  setLlmStatus("Extracting entities from your idea dump…");
-  let parsed;
-  try {
-    parsed = await extractFromIdeaDump(themeText);
-  } catch (err) {
-    setLlmStatus("");
-    alert("Extraction failed: " + err.message);
+  await runIdeaDumpExtractionNow(themeText);
+}
+
+async function runIdeaDumpExtractionNow(themeText) {
+  if (!themeText) themeText = (state.project.themeText || "").trim();
+  if (!themeText) {
+    alert("This project has no idea-dump text to extract from.");
     return;
   }
-  setLlmStatus("");
+  const busy = openBusyOverlay("Extracting entities from your idea dump…");
+  let parsed;
+  try {
+    console.debug("[idea-dump] starting extraction");
+    parsed = await extractFromIdeaDump(themeText);
+    console.debug("[idea-dump] extraction returned", parsed);
+  } catch (err) {
+    busy.close();
+    console.error("[idea-dump] extraction failed", err);
+    alert("Extraction failed: " + (err.message || err));
+    return;
+  }
+  busy.close();
+
+  if (!parsed || typeof parsed !== "object") {
+    alert("Extraction returned an unexpected shape. Check the browser console for details.");
+    console.error("[idea-dump] parsed is not an object", parsed);
+    return;
+  }
+
   openApprovalModal(parsed, {
     title: "Review what the LLM found in your idea dump",
     onApprove: async (approved) => {
-      await applyApprovedItems(approved);
-      // Then run gap analysis
-      setLlmStatus("Looking for narrative gaps to fill…");
+      try {
+        await applyApprovedItems(approved);
+      } catch (err) {
+        console.error("[idea-dump] applyApprovedItems failed", err);
+        alert("Saving approved items failed: " + (err.message || err));
+        return;
+      }
+      const gapBusy = openBusyOverlay("Looking for narrative gaps to fill…");
       let gap;
       try {
         gap = await runGapAnalysis(themeText, parsed);
+        console.debug("[idea-dump] gap analysis returned", gap);
       } catch (err) {
-        setLlmStatus("");
-        console.error(err);
+        gapBusy.close();
+        console.error("[idea-dump] gap analysis failed", err);
+        alert("Gap analysis failed: " + (err.message || err));
         return;
       }
-      setLlmStatus("");
-      openWizardModal(gap.questions || [], {
+      gapBusy.close();
+      const questions = gap?.questions || [];
+      if (questions.length === 0) {
+        console.debug("[idea-dump] no gap questions returned");
+        return;
+      }
+      openWizardModal(questions, {
         onComplete: async ({ answers }) => {
-          await applyWizardAnswers(answers);
+          try {
+            await applyWizardAnswers(answers);
+          } catch (err) {
+            console.error("[idea-dump] applyWizardAnswers failed", err);
+            alert("Saving wizard answers failed: " + (err.message || err));
+          }
         }
       });
     }
@@ -197,21 +238,32 @@ async function parseNoteHandler() {
     if (confirm("No LLM provider configured. Open Settings?")) openSettingsModal();
     return;
   }
-  setLlmStatus("Parsing note…");
+  const busy = openBusyOverlay("Parsing note…");
   let parsed;
   try {
     parsed = await parseSidePanelNote(text, existingEntitySummaries());
   } catch (err) {
-    setLlmStatus("");
-    alert("Parsing failed: " + err.message);
+    busy.close();
+    console.error("[parse-note] failed", err);
+    alert("Parsing failed: " + (err.message || err));
     return;
   }
-  setLlmStatus("");
+  busy.close();
+  if (!parsed || typeof parsed !== "object") {
+    alert("Parsing returned an unexpected shape. Check the browser console for details.");
+    console.error("[parse-note] parsed is not an object", parsed);
+    return;
+  }
   openApprovalModal(parsed, {
     title: "Review what the LLM found in your note",
     onApprove: async (approved) => {
-      await applyApprovedItems(approved);
-      els.notePanel.value = "";
+      try {
+        await applyApprovedItems(approved);
+        els.notePanel.value = "";
+      } catch (err) {
+        console.error("[parse-note] applyApprovedItems failed", err);
+        alert("Saving approved items failed: " + (err.message || err));
+      }
     }
   });
 }

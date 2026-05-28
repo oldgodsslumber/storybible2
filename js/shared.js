@@ -57,6 +57,39 @@ export const KANBAN_STAGES = [
   { id: "done",     label: "Done" }
 ];
 
+// Busy overlay used during LLM work. Returns { update, close, controller }.
+// The controller is an AbortController whose signal can be passed to fetch().
+export function openBusyOverlay(label) {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay busy-overlay";
+  overlay.innerHTML = `
+    <div class="modal busy-modal">
+      <div class="busy-spinner"></div>
+      <p class="busy-label">${label || "Working…"}</p>
+      <button class="ghost small busy-cancel">Cancel</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const controller = new AbortController();
+  const labelEl = overlay.querySelector(".busy-label");
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    overlay.remove();
+  };
+  overlay.querySelector(".busy-cancel").addEventListener("click", () => {
+    controller.abort(new DOMException("User cancelled", "AbortError"));
+    close();
+  });
+  return {
+    update: (text) => { if (labelEl) labelEl.textContent = text; },
+    close,
+    controller,
+    signal: controller.signal
+  };
+}
+
 export function blankFieldsForType(type) {
   switch (type) {
     case "character":

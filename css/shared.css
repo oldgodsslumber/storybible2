@@ -311,6 +311,32 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .chip:hover { border-color: var(--accent); }
 .chip.selected { background: var(--accent); color: #0f0f14; border-color: var(--accent); }
 
+/* Busy overlay (LLM work in progress) */
+.busy-overlay { z-index: 1100; }
+.busy-modal {
+  max-width: 360px;
+  padding: 28px 32px;
+  text-align: center;
+  align-items: center;
+}
+.busy-spinner {
+  width: 36px;
+  height: 36px;
+  margin: 0 auto 16px;
+  border: 3px solid var(--bg-elev-2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: busy-spin 0.9s linear infinite;
+}
+.busy-label {
+  margin: 0 0 16px 0;
+  color: var(--text);
+  font-size: 14px;
+}
+@keyframes busy-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* Refresh / progress */
 .progress-bar {
   width: 100%;

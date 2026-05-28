@@ -39,18 +39,40 @@ export function isConfigured() {
 
 // --- Core call ---
 
-export async function callLLM({ system, user, expectJson = false, temperature }) {
+const DEFAULT_TIMEOUT_MS = 120000; // 2 minutes — long enough for slow models, short enough to not freeze the UI forever
+
+export async function callLLM({ system, user, expectJson = false, temperature, signal, timeoutMs }) {
   const s = getSettings();
   if (s.provider === "none") {
     throw new Error("No LLM provider configured. Open Settings.");
   }
   const temp = temperature ?? s.temperature ?? 0.3;
-  if (s.provider === "gemini") return callGemini(s, { system, user, expectJson, temperature: temp });
-  if (s.provider === "ooba") return callOoba(s, { system, user, expectJson, temperature: temp });
-  throw new Error(`Unknown provider: ${s.provider}`);
+  // Combine caller signal with timeout signal
+  const timeoutCtl = new AbortController();
+  const timer = setTimeout(() => timeoutCtl.abort(new DOMException(`LLM call exceeded ${timeoutMs ?? DEFAULT_TIMEOUT_MS}ms timeout`, "TimeoutError")), timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const combinedSignal = anySignal([signal, timeoutCtl.signal]);
+  try {
+    if (s.provider === "gemini") return await callGemini(s, { system, user, expectJson, temperature: temp, signal: combinedSignal });
+    if (s.provider === "ooba")   return await callOoba(s,   { system, user, expectJson, temperature: temp, signal: combinedSignal });
+    throw new Error(`Unknown provider: ${s.provider}`);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
-async function callGemini(s, { system, user, expectJson, temperature }) {
+function anySignal(signals) {
+  const valid = signals.filter(Boolean);
+  if (valid.length === 0) return undefined;
+  if (valid.length === 1) return valid[0];
+  const ctl = new AbortController();
+  for (const sig of valid) {
+    if (sig.aborted) { ctl.abort(sig.reason); break; }
+    sig.addEventListener("abort", () => ctl.abort(sig.reason), { once: true });
+  }
+  return ctl.signal;
+}
+
+async function callGemini(s, { system, user, expectJson, temperature, signal }) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(s.geminiModel)}:generateContent?key=${encodeURIComponent(s.geminiApiKey)}`;
   const body = {
     contents: [{ role: "user", parts: [{ text: user }] }],
@@ -59,10 +81,12 @@ async function callGemini(s, { system, user, expectJson, temperature }) {
   if (system) body.systemInstruction = { parts: [{ text: system }] };
   if (expectJson) body.generationConfig.responseMimeType = "application/json";
 
+  console.debug("[llm] Gemini POST", { model: s.geminiModel, expectJson });
   const resp = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal
   });
   if (!resp.ok) {
     const errText = await resp.text();
@@ -70,10 +94,16 @@ async function callGemini(s, { system, user, expectJson, temperature }) {
   }
   const json = await resp.json();
   const text = json?.candidates?.[0]?.content?.parts?.map(p => p.text).join("") ?? "";
+  console.debug("[llm] Gemini reply", { length: text.length, preview: text.slice(0, 120) });
+  if (!text) {
+    const finishReason = json?.candidates?.[0]?.finishReason;
+    const safety = json?.candidates?.[0]?.safetyRatings;
+    throw new Error(`Gemini returned no text. finishReason=${finishReason || "unknown"}${safety ? "; safetyRatings=" + JSON.stringify(safety) : ""}`);
+  }
   return text;
 }
 
-async function callOoba(s, { system, user, expectJson, temperature }) {
+async function callOoba(s, { system, user, expectJson, temperature, signal }) {
   const base = s.oobaBaseUrl.replace(/\/+$/, "");
   const url = `${base}/v1/chat/completions`;
   const messages = [];
@@ -87,10 +117,12 @@ async function callOoba(s, { system, user, expectJson, temperature }) {
   };
   if (expectJson) body.response_format = { type: "json_object" };
 
+  console.debug("[llm] Ooba POST", { url, model: body.model, expectJson });
   const resp = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal
   });
   if (!resp.ok) {
     const errText = await resp.text();
@@ -98,6 +130,7 @@ async function callOoba(s, { system, user, expectJson, temperature }) {
   }
   const json = await resp.json();
   const text = json?.choices?.[0]?.message?.content ?? "";
+  console.debug("[llm] Ooba reply", { length: text.length, preview: text.slice(0, 120) });
   return text;
 }
 
