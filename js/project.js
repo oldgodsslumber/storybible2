@@ -727,14 +727,61 @@ function rebuildGraphElements() {
       }
     });
   }
-  console.log("[graph] rebuilding", { nodes: nodes.length, edges: edges.length });
+  const container = state.cy.container();
+  console.log("[graph] rebuilding", {
+    nodes: nodes.length,
+    edges: edges.length,
+    containerVisible: !els.graphView.classList.contains("hidden"),
+    containerSize: container ? { w: container.clientWidth, h: container.clientHeight } : null
+  });
   state.cy.add([...nodes, ...edges]);
-  // Cytoscape caches the container size at init. If the container was hidden
-  // or resized (e.g. while a modal was open), we need to tell it to re-measure
-  // before laying out — otherwise new nodes can render at 0,0 or off-screen.
-  state.cy.resize();
-  state.cy.layout({ name: "cose", animate: false }).run();
-  state.cy.fit(undefined, 30);
+
+  // Defer layout to next animation frame so the browser has finished any
+  // pending DOM reflow (modal close, view switch, etc.) before Cytoscape
+  // measures the container. Without this, cy.resize() can see stale 0x0
+  // dimensions and the layout places nodes at (0,0).
+  requestAnimationFrame(() => {
+    state.cy.resize();
+    const layout = chooseLayout(nodes.length, edges.length);
+    console.log("[graph] running layout", layout.name);
+    state.cy.layout(layout).run();
+    state.cy.fit(undefined, 40);
+  });
+}
+
+// Cose looks great when there are real edges to pull nodes together, but
+// clumps badly when most nodes are isolated (typical early story bible).
+// Pick a layout that suits the current shape of the graph.
+function chooseLayout(nodeCount, edgeCount) {
+  if (nodeCount === 0) return { name: "preset" };
+  // No edges → a grid is the cleanest "I can see everything" view.
+  if (edgeCount === 0) {
+    return { name: "grid", padding: 30, avoidOverlap: true, avoidOverlapPadding: 24 };
+  }
+  // Few edges relative to nodes → concentric so isolated nodes get their own ring.
+  if (edgeCount < nodeCount / 3) {
+    return {
+      name: "concentric",
+      padding: 30,
+      minNodeSpacing: 60,
+      avoidOverlap: true,
+      concentric: n => n.degree(),
+      levelWidth: () => 1
+    };
+  }
+  // Connected graph → cose with generous spacing so nodes don't pile up.
+  return {
+    name: "cose",
+    animate: false,
+    padding: 30,
+    nodeRepulsion: () => 50000,
+    idealEdgeLength: () => 140,
+    edgeElasticity: () => 80,
+    gravity: 0.15,
+    numIter: 2000,
+    nodeOverlap: 20,
+    randomize: false
+  };
 }
 
 // --- Card CRUD ---
