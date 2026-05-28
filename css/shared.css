@@ -207,6 +207,40 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
   font-size: 12px;
 }
 
+.connection-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.conn-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.conn-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted);
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.04);
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.conn-idle    .conn-dot { background: #555; }
+.conn-pending .conn-dot { background: var(--warn); animation: conn-pulse 1.2s ease-in-out infinite; }
+.conn-ok      .conn-dot { background: #4ec97a; box-shadow: 0 0 0 3px rgba(78,201,122,0.18); }
+.conn-err     .conn-dot { background: var(--danger); box-shadow: 0 0 0 3px rgba(217,106,106,0.18); }
+.conn-ok      .conn-label { color: #4ec97a; }
+.conn-err     .conn-label { color: var(--danger); }
+@keyframes conn-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+
 /* Approval modal */
 .approval-modal { max-width: 720px; }
 .approval-group { margin-bottom: 18px; }

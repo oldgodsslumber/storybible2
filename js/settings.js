@@ -1,5 +1,5 @@
 // Settings modal — open from any page. Persists LLM config to localStorage.
-import { getSettings, saveSettings } from "./llm.js";
+import { getSettings, saveSettings, callLLM } from "./llm.js";
 
 const NOTICE_KEY = "storybible.llm.notice.acknowledged";
 
@@ -43,6 +43,14 @@ export function openSettingsModal() {
         <label>Temperature
           <input id="temperature" type="number" step="0.05" min="0" max="2" value="${attr(s.temperature)}" />
         </label>
+
+        <div class="connection-row">
+          <button id="testConnBtn" class="ghost">Test connection</button>
+          <span id="connStatus" class="conn-status conn-idle">
+            <span class="conn-dot"></span>
+            <span class="conn-label">Not tested</span>
+          </span>
+        </div>
       </div>
       <div class="modal-actions">
         <button class="ghost cancel">Cancel</button>
@@ -56,25 +64,79 @@ export function openSettingsModal() {
   const refresh = () => {
     overlay.querySelector("#geminiFields").style.display = providerSel.value === "gemini" ? "" : "none";
     overlay.querySelector("#oobaFields").style.display = providerSel.value === "ooba" ? "" : "none";
+    setStatus("idle", "Not tested");
   };
   providerSel.addEventListener("change", refresh);
   refresh();
 
+  function setStatus(kind, label) {
+    const wrap = overlay.querySelector("#connStatus");
+    wrap.className = "conn-status conn-" + kind;
+    wrap.querySelector(".conn-label").textContent = label;
+  }
+
   const close = () => overlay.remove();
   overlay.querySelector(".close-modal").addEventListener("click", close);
   overlay.querySelector(".cancel").addEventListener("click", close);
-  overlay.addEventListener("click", e => { if (e.target === overlay) close(); });
 
-  overlay.querySelector(".save").addEventListener("click", () => {
-    saveSettings({
+  // Backdrop click should only close if BOTH mousedown AND mouseup happened
+  // on the overlay itself. Otherwise dragging to select text inside an input
+  // and releasing outside the modal closes it (the click event's target
+  // becomes the overlay — common ancestor of mousedown and mouseup).
+  let mouseDownOnOverlay = false;
+  overlay.addEventListener("mousedown", e => {
+    mouseDownOnOverlay = (e.target === overlay);
+  });
+  overlay.addEventListener("click", e => {
+    if (e.target === overlay && mouseDownOnOverlay) close();
+    mouseDownOnOverlay = false;
+  });
+
+  function readForm() {
+    return {
       provider: providerSel.value,
       geminiApiKey: overlay.querySelector("#geminiApiKey").value.trim(),
       geminiModel: overlay.querySelector("#geminiModel").value.trim() || "gemini-2.0-flash",
       oobaBaseUrl: overlay.querySelector("#oobaBaseUrl").value.trim() || "http://127.0.0.1:5000",
       oobaModel: overlay.querySelector("#oobaModel").value.trim() || "local-model",
       temperature: parseFloat(overlay.querySelector("#temperature").value) || 0.3
-    });
-    if (!localStorage.getItem(NOTICE_KEY) && providerSel.value !== "none") {
+    };
+  }
+
+  overlay.querySelector("#testConnBtn").addEventListener("click", async () => {
+    const form = readForm();
+    if (form.provider === "none") {
+      setStatus("err", "Pick a provider first");
+      return;
+    }
+    // Save current form values so callLLM picks them up
+    saveSettings(form);
+    setStatus("pending", "Testing…");
+    overlay.querySelector("#testConnBtn").disabled = true;
+    try {
+      const reply = await callLLM({
+        system: "You are a connection test. Reply with the literal word OK and nothing else.",
+        user: "ping",
+        expectJson: false,
+        temperature: 0
+      });
+      if ((reply || "").toLowerCase().includes("ok")) {
+        setStatus("ok", "Connected");
+      } else {
+        setStatus("ok", "Connected (unexpected reply)");
+      }
+    } catch (err) {
+      console.error(err);
+      setStatus("err", "Failed: " + (err.message || "unknown"));
+    } finally {
+      overlay.querySelector("#testConnBtn").disabled = false;
+    }
+  });
+
+  overlay.querySelector(".save").addEventListener("click", () => {
+    const form = readForm();
+    saveSettings(form);
+    if (!localStorage.getItem(NOTICE_KEY) && form.provider !== "none") {
       alert("Heads up: your API key and prompts are sent directly from this browser to the provider you chose. Nothing routes through a server we control.");
       localStorage.setItem(NOTICE_KEY, "1");
     }
