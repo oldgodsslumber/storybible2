@@ -72,6 +72,11 @@ onAuthChange(async user => {
   }
   state.user = user;
   renderUserArea(els.userArea, user);
+  if (projectLoaded) {
+    console.log("[init] auth changed but project already loaded; skipping reload");
+    return;
+  }
+  projectLoaded = true;
   await loadProject();
 });
 
@@ -83,6 +88,42 @@ els.refreshBtn?.addEventListener("click", handleRefresh);
 els.rerunExtractBtn?.addEventListener("click", () => runIdeaDumpExtractionNow());
 
 provideStateRef(state);
+
+// Unified wrapper for every LLM-driven action. Guarantees the user sees a
+// busy overlay (with cancel), a console trace, and an alert on failure.
+// Use this for every LLM call site so behavior is consistent.
+async function runLLMAction(label, fn) {
+  console.log("[llm-action] start:", label);
+  const busy = openBusyOverlay(label);
+  try {
+    const result = await fn(busy);
+    console.log("[llm-action] ok:", label, result);
+    busy.close();
+    return { ok: true, result };
+  } catch (err) {
+    busy.close();
+    console.error("[llm-action] failed:", label, err);
+    if (err?.name === "AbortError") {
+      console.log("[llm-action] cancelled by user:", label);
+      return { ok: false, error: err, cancelled: true };
+    }
+    alert(label + " failed:\n\n" + (err?.message || String(err)));
+    return { ok: false, error: err };
+  }
+}
+
+console.log("[init] project.js wiring", {
+  projectId,
+  isNewProject,
+  hasParseNoteBtn: !!els.parseNoteBtn,
+  hasRerunExtractBtn: !!els.rerunExtractBtn,
+  hasRefreshBtn: !!els.refreshBtn,
+  tabs: els.tabs.length,
+  cardTypeButtons: els.cardTypeButtons.length
+});
+
+// Guard against onAuthStateChanged firing twice (token refresh etc.)
+let projectLoaded = false;
 
 async function handleRefresh() {
   if (document.body.classList.contains("refresh-locked")) return;
@@ -183,29 +224,18 @@ async function runIdeaDumpExtractionNow(themeText) {
   console.log("[idea-dump] runIdeaDumpExtractionNow called", { providedText: !!themeText });
   if (!themeText) themeText = (state.project.themeText || "").trim();
   if (!themeText) {
-    console.log("[idea-dump] aborted: no themeText on project");
     alert("This project has no idea-dump text to extract from. Create a new project from the dashboard and type your idea dump in the big text field.");
     return;
   }
   if (!isConfigured()) {
-    console.log("[idea-dump] aborted: no LLM provider configured");
     alert("No LLM provider configured. Open ⚙ Settings to set one up.");
     return;
   }
-  const busy = openBusyOverlay("Extracting entities from your idea dump…");
-  let parsed;
-  try {
-    console.log("[idea-dump] starting extraction");
-    parsed = await extractFromIdeaDump(themeText);
-    console.log("[idea-dump] extraction returned", parsed);
-  } catch (err) {
-    busy.close();
-    console.error("[idea-dump] extraction failed", err);
-    alert("Extraction failed: " + (err.message || err));
-    return;
-  }
-  busy.close();
-
+  const { ok, result: parsed } = await runLLMAction(
+    "Extracting entities from your idea dump",
+    () => extractFromIdeaDump(themeText)
+  );
+  if (!ok) return;
   if (!parsed || typeof parsed !== "object") {
     alert("Extraction returned an unexpected shape. Check the browser console for details.");
     console.error("[idea-dump] parsed is not an object", parsed);
@@ -222,18 +252,11 @@ async function runIdeaDumpExtractionNow(themeText) {
         alert("Saving approved items failed: " + (err.message || err));
         return;
       }
-      const gapBusy = openBusyOverlay("Looking for narrative gaps to fill…");
-      let gap;
-      try {
-        gap = await runGapAnalysis(themeText, parsed);
-        console.log("[idea-dump] gap analysis returned", gap);
-      } catch (err) {
-        gapBusy.close();
-        console.error("[idea-dump] gap analysis failed", err);
-        alert("Gap analysis failed: " + (err.message || err));
-        return;
-      }
-      gapBusy.close();
+      const { ok: gapOk, result: gap } = await runLLMAction(
+        "Looking for narrative gaps to fill",
+        () => runGapAnalysis(themeText, parsed)
+      );
+      if (!gapOk) return;
       const questions = gap?.questions || [];
       if (questions.length === 0) {
         console.log("[idea-dump] no gap questions returned");
@@ -257,7 +280,6 @@ async function parseNoteHandler() {
   console.log("[parse-note] button clicked");
   const text = els.notePanel.value.trim();
   if (!text) {
-    console.log("[parse-note] aborted: notepad is empty");
     alert("Type something into the note panel first, then click Parse with LLM.");
     return;
   }
@@ -265,17 +287,11 @@ async function parseNoteHandler() {
     if (confirm("No LLM provider configured. Open Settings?")) openSettingsModal();
     return;
   }
-  const busy = openBusyOverlay("Parsing note…");
-  let parsed;
-  try {
-    parsed = await parseSidePanelNote(text, existingEntitySummaries());
-  } catch (err) {
-    busy.close();
-    console.error("[parse-note] failed", err);
-    alert("Parsing failed: " + (err.message || err));
-    return;
-  }
-  busy.close();
+  const { ok, result: parsed } = await runLLMAction(
+    "Parsing note",
+    () => parseSidePanelNote(text, existingEntitySummaries())
+  );
+  if (!ok) return;
   if (!parsed || typeof parsed !== "object") {
     alert("Parsing returned an unexpected shape. Check the browser console for details.");
     console.error("[parse-note] parsed is not an object", parsed);
@@ -884,24 +900,29 @@ async function saveTagPicker(cardId, picker) {
 }
 
 async function handleSuggestTraits(cardId) {
-  try {
-    setLlmStatus("Generating trait suggestions…");
-    const r = await suggestTraits(state, cardId);
-    setLlmStatus("");
-    if (!r || !r.suggestions) return;
-    openTraitSuggestModal(r.suggestions, {
-      onApply: async (picked) => {
-        if (!picked || picked.length === 0) return;
-        await applyTraitSuggestions(state, projectId, cardId, picked);
-        if (state.selectedCardId === cardId) openCardEditor(cardId);
-        rebuildGraphElements();
-        updateRefreshNudge();
-      }
-    });
-  } catch (e) {
-    setLlmStatus("");
-    alert("Trait suggestion failed: " + e.message);
+  console.log("[suggest-traits] clicked", { cardId });
+  if (!isConfigured()) {
+    if (confirm("No LLM provider configured. Open Settings?")) openSettingsModal();
+    return;
   }
+  const { ok, result: r } = await runLLMAction(
+    "Generating trait suggestions",
+    () => suggestTraits(state, cardId)
+  );
+  if (!ok) return;
+  if (!r || !r.suggestions || r.suggestions.length === 0) {
+    alert("No trait suggestions came back. Check the console for what the LLM returned.");
+    return;
+  }
+  openTraitSuggestModal(r.suggestions, {
+    onApply: async (picked) => {
+      if (!picked || picked.length === 0) return;
+      await applyTraitSuggestions(state, projectId, cardId, picked);
+      if (state.selectedCardId === cardId) openCardEditor(cardId);
+      rebuildGraphElements();
+      updateRefreshNudge();
+    }
+  });
 }
 
 async function saveField(cardId, input) {
@@ -1084,21 +1105,16 @@ function makePlusButton(beforeSceneId, afterSceneId) {
 }
 
 async function handleScenePlus(beforeSceneId, afterSceneId) {
+  console.log("[scene-plus] clicked", { beforeSceneId, afterSceneId });
   if (!isConfigured()) {
     if (confirm("No LLM provider configured. Open Settings?")) openSettingsModal();
     return;
   }
-  setLlmStatus("Generating scene proposal…");
-  let gen;
-  try {
-    gen = await generateScene(state, { beforeSceneId, afterSceneId });
-  } catch (e) {
-    setLlmStatus("");
-    alert("Scene generation failed: " + e.message);
-    return;
-  }
-  setLlmStatus("");
-  if (!gen) return;
+  const { ok, result: gen } = await runLLMAction(
+    "Generating scene proposal",
+    () => generateScene(state, { beforeSceneId, afterSceneId })
+  );
+  if (!ok || !gen) return;
   openSceneProposalModal(gen, {
     onAccept: async (edited) => {
       const position = beforeSceneId ? { afterId: beforeSceneId } : (afterSceneId ? { beforeId: afterSceneId } : null);

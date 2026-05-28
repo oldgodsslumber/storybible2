@@ -12,6 +12,26 @@ import {
 import { callLLM, parseJsonLoose, isConfigured } from "./llm.js";
 import { openSettingsModal } from "./settings.js";
 import { logAudit } from "./audit.js";
+import { openBusyOverlay } from "./shared.js";
+
+// Mirror of project.js runLLMAction so review-panel calls get the same
+// busy overlay + console trace + error alert behavior.
+async function runLLMAction(label, fn) {
+  console.log("[llm-action] start:", label);
+  const busy = openBusyOverlay(label);
+  try {
+    const result = await fn();
+    console.log("[llm-action] ok:", label, result);
+    busy.close();
+    return { ok: true, result };
+  } catch (err) {
+    busy.close();
+    console.error("[llm-action] failed:", label, err);
+    if (err?.name === "AbortError") return { ok: false, error: err, cancelled: true };
+    alert(label + " failed:\n\n" + (err?.message || String(err)));
+    return { ok: false, error: err };
+  }
+}
 
 // ---------- Prompts ----------
 
@@ -365,16 +385,15 @@ function renderCharacterMode(body, state, projectId) {
     <div id="charReviewOut" class="review-output"></div>
   `;
   body.querySelector("#runCharReview").addEventListener("click", async () => {
+    console.log("[review] character arc clicked");
     const id = body.querySelector("#reviewCharSel").value;
     const out = body.querySelector("#charReviewOut");
-    out.innerHTML = `<p class="muted">Reviewing…</p>`;
-    try {
-      const r = await reviewCharacterArc(state, id);
-      if (!r) { out.innerHTML = ""; return; }
-      out.innerHTML = `<div class="review-prose">${proseToHtml(r.review || "")}</div>`;
-    } catch (e) {
-      out.innerHTML = `<p class="muted">Failed: ${esc(e.message)}</p>`;
-    }
+    const { ok, result: r } = await runLLMAction(
+      "Reviewing character arc",
+      () => reviewCharacterArc(state, id)
+    );
+    if (!ok || !r) { out.innerHTML = ""; return; }
+    out.innerHTML = `<div class="review-prose">${proseToHtml(r.review || "")}</div>`;
   });
 }
 
@@ -384,15 +403,14 @@ function renderSynopsisMode(body, state) {
     <div id="synopsisOut" class="review-output"></div>
   `;
   body.querySelector("#runSynopsis").addEventListener("click", async () => {
+    console.log("[review] synopsis clicked");
     const out = body.querySelector("#synopsisOut");
-    out.innerHTML = `<p class="muted">Generating…</p>`;
-    try {
-      const r = await generateSynopsis(state);
-      if (!r) { out.innerHTML = ""; return; }
-      out.innerHTML = `<div class="review-prose">${proseToHtml(r.synopsis || "")}</div>`;
-    } catch (e) {
-      out.innerHTML = `<p class="muted">Failed: ${esc(e.message)}</p>`;
-    }
+    const { ok, result: r } = await runLLMAction(
+      "Generating synopsis",
+      () => generateSynopsis(state)
+    );
+    if (!ok || !r) { out.innerHTML = ""; return; }
+    out.innerHTML = `<div class="review-prose">${proseToHtml(r.synopsis || "")}</div>`;
   });
 }
 
@@ -419,33 +437,38 @@ function renderArcsMode(body, state, projectId, onChanged) {
     list.appendChild(section);
 
     section.querySelector(".save-arc").addEventListener("click", async () => {
+      console.log("[review] save-arc clicked", { arcId: arc.id });
       const ta = section.querySelector(".arc-summary-input");
       const tensionBox = section.querySelector(".arc-tension");
       const newSummary = ta.value;
-      tensionBox.innerHTML = `<p class="muted">Saving & analyzing tension…</p>`;
       try {
         await saveArcSummary(state, projectId, arc.id, newSummary);
-        const r = await analyzeArcTension(state, arc.id, newSummary);
-        if (!r || !r.tensions || r.tensions.length === 0) {
-          tensionBox.innerHTML = `<p class="muted small">No scene tensions detected with the new summary.</p>`;
-        } else {
-          tensionBox.innerHTML = `
-            <h4>Scenes in tension</h4>
-            <ul class="tension-list">
-              ${r.tensions.map(t => `
-                <li>
-                  <div class="tension-scene"><strong>${esc(t.sceneTitle)}</strong></div>
-                  <div class="muted small">Problem: ${esc(t.problem)}</div>
-                  <div class="muted small">Suggestion: ${esc(t.suggestion)}</div>
-                </li>
-              `).join("")}
-            </ul>
-          `;
-        }
-        onChanged?.();
       } catch (e) {
-        tensionBox.innerHTML = `<p class="muted">Failed: ${esc(e.message)}</p>`;
+        alert("Saving arc summary failed: " + (e.message || e));
+        return;
       }
+      const { ok, result: r } = await runLLMAction(
+        "Analyzing arc tension",
+        () => analyzeArcTension(state, arc.id, newSummary)
+      );
+      if (!ok) return;
+      if (!r || !r.tensions || r.tensions.length === 0) {
+        tensionBox.innerHTML = `<p class="muted small">No scene tensions detected with the new summary.</p>`;
+      } else {
+        tensionBox.innerHTML = `
+          <h4>Scenes in tension</h4>
+          <ul class="tension-list">
+            ${r.tensions.map(t => `
+              <li>
+                <div class="tension-scene"><strong>${esc(t.sceneTitle)}</strong></div>
+                <div class="muted small">Problem: ${esc(t.problem)}</div>
+                <div class="muted small">Suggestion: ${esc(t.suggestion)}</div>
+              </li>
+            `).join("")}
+          </ul>
+        `;
+      }
+      onChanged?.();
     });
   }
 }
@@ -456,12 +479,14 @@ function renderThemeMode(body, state) {
     <div id="themeOut" class="review-output"></div>
   `;
   body.querySelector("#runThemeCheck").addEventListener("click", async () => {
+    console.log("[review] theme coherence clicked");
     const out = body.querySelector("#themeOut");
-    out.innerHTML = `<p class="muted">Analyzing…</p>`;
-    try {
-      const r = await themeCoherence(state);
-      if (!r) { out.innerHTML = ""; return; }
-      const perTheme = (r.perTheme || []).map(t => `
+    const { ok, result: r } = await runLLMAction(
+      "Analyzing theme coherence",
+      () => themeCoherence(state)
+    );
+    if (!ok || !r) { out.innerHTML = ""; return; }
+    const perTheme = (r.perTheme || []).map(t => `
         <section class="theme-block">
           <h3>${esc(t.theme)}</h3>
           ${t.supporting?.length ? `
@@ -472,10 +497,7 @@ function renderThemeMode(body, state) {
             <ul class="disconnected">${t.disconnected.map(x => `<li><strong>${esc(x.name)}</strong> <span class="muted small">(${esc(x.type)})</span> — ${esc(x.note)}</li>`).join("")}</ul>` : ""}
         </section>
       `).join("");
-      out.innerHTML = `${perTheme}<p class="review-overall"><strong>Overall:</strong> ${esc(r.overall || "")}</p>`;
-    } catch (e) {
-      out.innerHTML = `<p class="muted">Failed: ${esc(e.message)}</p>`;
-    }
+    out.innerHTML = `${perTheme}<p class="review-overall"><strong>Overall:</strong> ${esc(r.overall || "")}</p>`;
   });
 }
 
