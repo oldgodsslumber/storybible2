@@ -2,6 +2,12 @@
 // approval modal (extraction vs. inference), and gap-analysis wizard.
 
 import { callLLM, parseJsonLoose, isConfigured } from "./llm.js";
+import { buildProjectContext } from "./story-settings.js";
+
+// State ref so extraction prompts can include project context.
+let STATE_REF = null;
+export function provideExtractionStateRef(stateObj) { STATE_REF = stateObj; }
+function context() { return buildProjectContext(STATE_REF?.project); }
 
 // ---------- Prompts ----------
 
@@ -76,7 +82,7 @@ No prose outside the JSON.`;
 export async function extractFromIdeaDump(themeText) {
   if (!isConfigured()) throw new Error("Configure an LLM provider in Settings first.");
   const user = `Idea dump:\n"""\n${themeText}\n"""\n\nReturn the JSON described in the system prompt.`;
-  const raw = await callLLM({ system: EXTRACTION_SYSTEM, user, expectJson: true });
+  const raw = await callLLM({ system: context() + EXTRACTION_SYSTEM, user, expectJson: true });
   return parseJsonLoose(raw);
 }
 
@@ -84,14 +90,14 @@ export async function parseSidePanelNote(noteText, existingEntities) {
   if (!isConfigured()) throw new Error("Configure an LLM provider in Settings first.");
   const summary = summarizeExistingEntities(existingEntities);
   const user = `Existing entities in this project:\n${summary}\n\nNew note from the writer:\n"""\n${noteText}\n"""\n\nReturn the JSON described in the system prompt.`;
-  const raw = await callLLM({ system: NOTE_PARSE_SYSTEM, user, expectJson: true });
+  const raw = await callLLM({ system: context() + NOTE_PARSE_SYSTEM, user, expectJson: true });
   return parseJsonLoose(raw);
 }
 
 export async function runGapAnalysis(themeText, extracted) {
   if (!isConfigured()) throw new Error("Configure an LLM provider in Settings first.");
   const user = `Idea dump:\n"""\n${themeText}\n"""\n\nExtracted so far:\n${JSON.stringify(extracted, null, 2)}\n\nReturn the JSON described in the system prompt.`;
-  const raw = await callLLM({ system: GAP_ANALYSIS_SYSTEM, user, expectJson: true });
+  const raw = await callLLM({ system: context() + GAP_ANALYSIS_SYSTEM, user, expectJson: true });
   return parseJsonLoose(raw);
 }
 

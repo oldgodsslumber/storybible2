@@ -18,6 +18,8 @@ import {
   openSceneProposalModal
 } from "./review.js";
 import { renderOracle } from "./oracle.js";
+import { openStorySettingsModal } from "./story-settings.js";
+import { provideExtractionStateRef } from "./extraction.js";
 
 const REFRESH_NUDGE_THRESHOLD = 60;
 
@@ -48,6 +50,8 @@ const els = {
   cardEditor: document.getElementById("cardEditor"),
   refreshBtn: document.getElementById("refreshBtn"),
   refreshBadge: document.getElementById("refreshBadge"),
+  recenterBtn: document.getElementById("recenterBtn"),
+  storySettingsBtn: document.getElementById("storySettingsBtn"),
   tabs: document.querySelectorAll(".tab"),
   cardTypeButtons: document.querySelectorAll(".card-type-buttons button"),
 };
@@ -88,8 +92,19 @@ els.parseNoteBtn?.addEventListener("click", parseNoteHandler);
 els.clearNoteBtn?.addEventListener("click", () => { els.notePanel.value = ""; });
 els.refreshBtn?.addEventListener("click", handleRefresh);
 els.rerunExtractBtn?.addEventListener("click", () => runIdeaDumpExtractionNow());
+els.recenterBtn?.addEventListener("click", () => {
+  if (!state.cy) return;
+  state.cy.resize();
+  state.cy.fit(undefined, 40);
+});
+els.storySettingsBtn?.addEventListener("click", () => {
+  openStorySettingsModal(state, projectId, {
+    onSaved: () => { console.log("[story-settings] saved"); }
+  });
+});
 
 provideStateRef(state);
+provideExtractionStateRef(state);
 
 // Unified wrapper for every LLM-driven action. Guarantees the user sees a
 // busy overlay (with cancel), a console trace, and an alert on failure.

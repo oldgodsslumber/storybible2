@@ -14,7 +14,7 @@
       <span id="projectTitle">…</span>
     </div>
     <nav class="view-tabs">
-      <button data-view="graph" class="tab active">Graph</button>
+      <button data-view="graph" class="tab active">Canvas</button>
       <button data-view="outline" class="tab">Outline</button>
       <button data-view="review" class="tab">Review</button>
       <button data-view="kanban" class="tab">Kanban</button>
@@ -22,6 +22,7 @@
       <button data-view="archive" class="tab">Archive</button>
     </nav>
     <div class="topbar-actions">
+      <button id="storySettingsBtn" class="ghost small" title="Story settings (genre, premise, anchor terms)">📖 Story</button>
       <button id="refreshBtn" class="ghost small" title="Regenerate stale summaries">↻ Refresh <span id="refreshBadge" class="badge-count hidden">0</span></button>
     </div>
     <div class="user-area" id="userArea"></div>
@@ -58,7 +59,7 @@
         <h3>Notes</h3>
         <textarea id="notePanel" placeholder="Dump whatever's in your head. LLM will organize it into cards." rows="8"></textarea>
         <div class="note-actions">
-          <button id="parseNoteBtn" class="primary small">Parse with LLM</button>
+          <button id="parseNoteBtn" class="primary small">Process</button>
           <button id="clearNoteBtn" class="ghost small">Clear</button>
         </div>
         <hr />
@@ -67,6 +68,7 @@
       </aside>
       <div class="graph-area">
         <div id="cy"></div>
+        <button id="recenterBtn" class="ghost small canvas-recenter-btn" title="Refit graph to view">⤧ Recenter</button>
         <div id="cardEditor" class="card-editor hidden"></div>
       </div>
     </section>

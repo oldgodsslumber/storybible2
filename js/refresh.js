@@ -13,6 +13,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { callLLM, parseJsonLoose, isConfigured } from "./llm.js";
 import { changesSinceLastRefresh } from "./audit.js";
+import { buildProjectContext } from "./story-settings.js";
 
 const BATCH_SIZE = 12;
 
@@ -195,26 +196,27 @@ function scenesFeaturingCharacter(state, characterId) {
   );
 }
 
-async function callBatched(system, ctx) {
+async function callBatched(system, payload) {
   // If recentChanges is large, split into ~BATCH_SIZE chunks and feed sequentially.
-  const changes = ctx.recentChanges || [];
+  const changes = payload.recentChanges || [];
   if (changes.length <= BATCH_SIZE) {
-    return runOne(system, ctx);
+    return runOne(system, payload);
   }
   // Multi-batch: feed accumulated context across calls. The model's last
   // output is used as the canonical summary.
   let last = null;
   for (let i = 0; i < changes.length; i += BATCH_SIZE) {
     const slice = changes.slice(i, i + BATCH_SIZE);
-    const partial = { ...ctx, recentChanges: slice, previousDraft: last };
+    const partial = { ...payload, recentChanges: slice, previousDraft: last };
     last = await runOne(system, partial);
   }
   return last || {};
 }
 
-async function runOne(system, ctx) {
-  const userText = `Context:\n${JSON.stringify(ctx, null, 2)}\n\nReturn the JSON described in the system prompt.`;
-  const raw = await callLLM({ system, user: userText, expectJson: true });
+async function runOne(system, payload) {
+  const userText = `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON described in the system prompt.`;
+  const projectCtx = buildProjectContext(STATE_REF?.project);
+  const raw = await callLLM({ system: projectCtx + system, user: userText, expectJson: true });
   return parseJsonLoose(raw);
 }
 

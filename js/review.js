@@ -13,6 +13,9 @@ import { callLLM, parseJsonLoose, isConfigured } from "./llm.js";
 import { openSettingsModal } from "./settings.js";
 import { logAudit } from "./audit.js";
 import { openBusyOverlay } from "./shared.js";
+import { buildProjectContext } from "./story-settings.js";
+
+function ctx(state) { return buildProjectContext(state?.project); }
 
 // Mirror of project.js runLLMAction so review-panel calls get the same
 // busy overlay + console trace + error alert behavior.
@@ -100,7 +103,22 @@ async function ensureLLM() {
 
 async function callJson(system, user) {
   const raw = await callLLM({ system, user, expectJson: true });
-  return parseJsonLoose(raw);
+  try {
+    return parseJsonLoose(raw);
+  } catch (firstErr) {
+    // Retry once with a stricter prompt. Catches the occasional case where
+    // the model added a trailing comma or stray prose. We re-feed the model
+    // its own (broken) output and ask for clean JSON of the same shape.
+    console.warn("[llm] parse failed once, retrying with cleanup prompt:", firstErr.message);
+    const cleanupSystem = "You are a JSON repair assistant. The user will paste broken or wrapped JSON. Return ONLY the corrected JSON, no prose, no fences. Preserve all data; only fix syntax.";
+    const repaired = await callLLM({
+      system: cleanupSystem,
+      user: `Broken output:\n${raw}`,
+      expectJson: true,
+      temperature: 0
+    });
+    return parseJsonLoose(repaired);
+  }
 }
 
 // ---------- Public API ----------
@@ -110,40 +128,40 @@ export async function reviewCharacterArc(state, characterId) {
   const ch = state.cards.get(characterId);
   if (!ch) return null;
   const scenes = scenesFeaturingByName(state, ch.title);
-  const ctx = {
+  const payload = {
     character: pickCharacter(ch),
     scenesInOrder: scenes.map(pickScene),
     themes: themeList(state)
   };
-  return callJson(ARC_REVIEW_SYSTEM, `Context:\n${JSON.stringify(ctx, null, 2)}\n\nReturn the JSON.`);
+  return callJson(ctx(state) + ARC_REVIEW_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`);
 }
 
 export async function generateSynopsis(state) {
   if (!await ensureLLM()) return null;
-  const ctx = {
+  const payload = {
     project: { title: state.project.title, logline: state.project.logline, themeText: state.project.themeText },
     themes: themeList(state),
     characters: characterList(state).map(pickCharacter),
     scenesInOrder: sceneList(state).map(pickScene)
   };
-  return callJson(SYNOPSIS_SYSTEM, `Context:\n${JSON.stringify(ctx, null, 2)}\n\nReturn the JSON.`);
+  return callJson(ctx(state) + SYNOPSIS_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`);
 }
 
 export async function themeCoherence(state) {
   if (!await ensureLLM()) return null;
-  const ctx = {
+  const payload = {
     themes: themeList(state),
     characters: characterList(state).map(pickCharacter),
     scenes: sceneList(state).map(pickScene)
   };
-  return callJson(THEME_COHERENCE_SYSTEM, `Context:\n${JSON.stringify(ctx, null, 2)}\n\nReturn the JSON.`);
+  return callJson(ctx(state) + THEME_COHERENCE_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`);
 }
 
 export async function generateScene(state, { beforeSceneId, afterSceneId }) {
   if (!await ensureLLM()) return null;
   const before = beforeSceneId ? state.cards.get(beforeSceneId) : null;
   const after  = afterSceneId  ? state.cards.get(afterSceneId)  : null;
-  const ctx = {
+  const payload = {
     precedingScene: before ? pickScene(before) : null,
     followingScene: after  ? pickScene(after)  : null,
     themes: themeList(state),
@@ -151,19 +169,19 @@ export async function generateScene(state, { beforeSceneId, afterSceneId }) {
     existingLocationNames:  locationList(state).map(c => c.title),
     nearbyScenes: sceneList(state).slice(0, 30).map(pickScene)
   };
-  return callJson(SCENE_GEN_SYSTEM, `Context:\n${JSON.stringify(ctx, null, 2)}\n\nReturn the JSON.`);
+  return callJson(ctx(state) + SCENE_GEN_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`);
 }
 
 export async function suggestTraits(state, characterId) {
   if (!await ensureLLM()) return null;
   const ch = state.cards.get(characterId);
   if (!ch) return null;
-  const ctx = {
+  const payload = {
     character: pickCharacter(ch),
     themes: themeList(state),
     otherCharacters: characterList(state).filter(c => c.id !== characterId).map(pickCharacter)
   };
-  return callJson(TRAIT_SUGGEST_SYSTEM, `Context:\n${JSON.stringify(ctx, null, 2)}\n\nReturn the JSON.`);
+  return callJson(ctx(state) + TRAIT_SUGGEST_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`);
 }
 
 export async function analyzeArcTension(state, arcId, newSummary) {
@@ -171,11 +189,11 @@ export async function analyzeArcTension(state, arcId, newSummary) {
   const arc = state.cards.get(arcId);
   if (!arc) return null;
   const scenes = sceneList(state).filter(s => (s.fields?.arcIds || []).includes(arcId));
-  const ctx = {
+  const payload = {
     arc: { title: arc.title, newSummary },
     scenes: scenes.map(pickScene)
   };
-  return callJson(TENSION_SYSTEM, `Context:\n${JSON.stringify(ctx, null, 2)}\n\nReturn the JSON.`);
+  return callJson(ctx(state) + TENSION_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`);
 }
 
 // ---------- Helpers: list / pick ----------
@@ -344,21 +362,34 @@ export function renderReviewPanel(container, state, projectId, { onChanged }) {
     <div class="review-header">
       <h2>Review Panel</h2>
       <div class="review-mode-tabs">
-        <button class="review-tab active" data-mode="character">Character Arc</button>
-        <button class="review-tab" data-mode="synopsis">Synopsis</button>
-        <button class="review-tab" data-mode="arcs">Arc Summaries</button>
-        <button class="review-tab" data-mode="theme">Theme Coherence</button>
+        <button class="review-tab active" data-mode="character" title="One character's journey across the story">Character Arc</button>
+        <button class="review-tab" data-mode="synopsis" title="Story-level synopsis of everything">Synopsis</button>
+        <button class="review-tab" data-mode="arcs" title="Per-subplot arc-card summaries with tension flagging">Subplot Arcs</button>
+        <button class="review-tab" data-mode="theme" title="Where scenes and characters support or drift from the themes">Theme Coherence</button>
       </div>
+      <p id="reviewModeBlurb" class="muted small review-blurb"></p>
     </div>
     <div id="reviewBody" class="review-body"></div>
   `;
   const body = container.querySelector("#reviewBody");
+  const blurb = container.querySelector("#reviewModeBlurb");
   const tabs = container.querySelectorAll(".review-tab");
+  const setBlurb = (mode) => {
+    const blurbs = {
+      character: "Pick a character. The model writes 2–4 paragraphs on their trajectory across the whole story: starting point, turning points, where they end up.",
+      synopsis:  "A 3–5 paragraph story-level synopsis built from your themes, characters, and ordered scenes. Good for sanity-checking that the story communicates what you intend.",
+      arcs:      "Each Arc card here represents a subplot or throughline. Edit its summary and save to ask the model which scenes now feel in tension with that arc.",
+      theme:     "Which scenes and characters support each theme pillar, and which feel disconnected. Surfaces drift early."
+    };
+    blurb.textContent = blurbs[mode] || "";
+  };
   tabs.forEach(t => t.addEventListener("click", () => {
     tabs.forEach(x => x.classList.remove("active"));
     t.classList.add("active");
+    setBlurb(t.dataset.mode);
     renderReviewMode(body, state, projectId, t.dataset.mode, onChanged);
   }));
+  setBlurb("character");
   renderReviewMode(body, state, projectId, "character", onChanged);
 }
 
