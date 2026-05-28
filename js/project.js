@@ -17,6 +17,7 @@ import {
   suggestTraits, applyTraitSuggestions, openTraitSuggestModal,
   openSceneProposalModal
 } from "./review.js";
+import { renderOracle } from "./oracle.js";
 
 const REFRESH_NUDGE_THRESHOLD = 60;
 
@@ -43,6 +44,7 @@ const els = {
   archiveEmpty: document.getElementById("archiveEmpty"),
   kanbanView: document.getElementById("kanbanView"),
   kanbanBoard: document.getElementById("kanbanBoard"),
+  oracleView: document.getElementById("oracleView"),
   cardEditor: document.getElementById("cardEditor"),
   refreshBtn: document.getElementById("refreshBtn"),
   refreshBadge: document.getElementById("refreshBadge"),
@@ -519,6 +521,7 @@ function switchView(name) {
   hide(els.reviewView);
   hide(els.archiveView);
   hide(els.kanbanView);
+  hide(els.oracleView);
   hideCardEditor();
 
   if (name === "graph") {
@@ -536,6 +539,9 @@ function switchView(name) {
   } else if (name === "kanban") {
     show(els.kanbanView);
     renderKanban();
+  } else if (name === "oracle") {
+    show(els.oracleView);
+    renderOracle(els.oracleView);
   } else if (name === "archive") {
     show(els.archiveView);
     renderArchive();

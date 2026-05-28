@@ -18,6 +18,7 @@
       <button data-view="outline" class="tab">Outline</button>
       <button data-view="review" class="tab">Review</button>
       <button data-view="kanban" class="tab">Kanban</button>
+      <button data-view="oracle" class="tab">Oracle</button>
       <button data-view="archive" class="tab">Archive</button>
     </nav>
     <div class="topbar-actions">
@@ -93,6 +94,25 @@
         <p class="muted small">Drag scene cards between stages. Tracks production status separately from the story bible.</p>
       </div>
       <div id="kanbanBoard" class="kanban-board"></div>
+    </section>
+
+    <!-- ORACLE VIEW -->
+    <section id="oracleView" class="view hidden">
+      <div class="oracle-header">
+        <h2>Oracle</h2>
+        <p class="muted small">Roll tables for modern-setting story prompts: jobs, names, locations, generators, character backstory, villain motives.</p>
+      </div>
+      <div class="oracle-layout">
+        <aside class="oracle-sidebar">
+          <input id="oracleSearch" type="search" placeholder="Filter tables…" />
+          <div id="oracleSectionList" class="oracle-section-list"></div>
+        </aside>
+        <main class="oracle-main">
+          <div id="oracleEmpty" class="muted">Pick a table from the left to roll on it.</div>
+          <div id="oracleTablePanel" class="hidden"></div>
+          <div id="oracleHistory" class="oracle-history"></div>
+        </main>
+      </div>
     </section>
 
     <!-- ARCHIVE VIEW -->

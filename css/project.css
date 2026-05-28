@@ -214,6 +214,125 @@ body { display: flex; flex-direction: column; height: 100vh; }
 .scene-proposal-modal { max-width: 600px; }
 .proposal-meta { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
 
+/* Oracle */
+#oracleView { padding: 0; display: flex; flex-direction: column; }
+.oracle-header { padding: 18px 24px 10px; border-bottom: 1px solid var(--border); }
+.oracle-header h2 { margin: 0 0 4px 0; }
+.oracle-layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  overflow: hidden;
+}
+.oracle-sidebar {
+  border-right: 1px solid var(--border);
+  background: var(--bg-elev);
+  padding: 14px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.oracle-sidebar input[type=search] {
+  width: 100%;
+}
+.oracle-section-list { display: flex; flex-direction: column; gap: 14px; }
+.oracle-section h3 {
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+}
+.oracle-section ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.oracle-table-link {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  border: 1px solid transparent;
+  background: var(--bg-elev-2);
+}
+.oracle-table-link:hover { border-color: var(--accent); }
+.oracle-table-link.active { background: rgba(122,156,255,0.18); border-color: var(--accent); }
+.oracle-table-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oracle-table-dice { flex-shrink: 0; }
+
+.oracle-main {
+  overflow-y: auto;
+  padding: 20px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.oracle-table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.oracle-table-header h3 { margin: 0; }
+.oracle-result {
+  background: var(--bg-elev);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.oracle-result-main {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+}
+.oracle-result-detail { font-family: ui-monospace, monospace; }
+.oracle-result .copy-result { align-self: flex-start; margin-top: 6px; }
+
+.oracle-entries summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--muted);
+  padding: 6px 0;
+}
+.oracle-entries summary:hover { color: var(--text); }
+.oracle-entry-list {
+  margin: 8px 0 0 20px;
+  font-size: 13px;
+  color: var(--text);
+}
+.oracle-entry-list li { padding: 2px 0; }
+
+.oracle-history { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.oracle-history h4 {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+}
+.oracle-history-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.oracle-history-list li {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+.oracle-history-main { font-size: 14px; }
+
 /* Kanban */
 .kanban-header { margin-bottom: 16px; }
 .kanban-board {
