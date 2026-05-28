@@ -18,7 +18,7 @@ import {
   openSceneProposalModal
 } from "./review.js";
 import { renderOracle } from "./oracle.js";
-import { openStorySettingsModal } from "./story-settings.js";
+import { openStorySettingsModal, getColumnsForProject, defaultColumnId } from "./story-settings.js";
 import { provideExtractionStateRef } from "./extraction.js";
 
 const REFRESH_NUDGE_THRESHOLD = 60;
@@ -198,6 +198,11 @@ async function loadProject() {
 
   const connSnap = await getDocs(collection(db, "users", state.user.uid, "projects", projectId, "connections"));
   connSnap.forEach(d => state.connections.set(d.id, { id: d.id, ...d.data() }));
+
+  // Backward-compat: any scene/beat without a columnId gets dropped into the
+  // first main column of the current structure. Persist to Firestore once so
+  // future loads don't need to keep migrating.
+  await migrateUnassignedColumns();
 
   hide(els.loading);
   switchView("graph");
@@ -777,6 +782,11 @@ function initOrRefreshGraph() {
   rebuildGraphElements();
 }
 
+// Cards visible on the Canvas. Scenes are excluded — they live exclusively
+// in the Outline. Beats stay on Canvas too (they're structural anchors that
+// can have relationships) but their primary home is Outline.
+const CANVAS_CARD_TYPES = new Set(["character", "location", "theme", "arc", "beat"]);
+
 function rebuildGraphElements() {
   if (!state.cy) {
     console.warn("[graph] rebuildGraphElements: state.cy is not initialized yet");
@@ -786,6 +796,7 @@ function rebuildGraphElements() {
   const nodes = [];
   for (const card of state.cards.values()) {
     if (card.archived) continue;
+    if (!CANVAS_CARD_TYPES.has(card.type)) continue;
     const f = card.fields || {};
     const stale = !!(f.storyRoleSummaryStale || f.ragSummaryStale || f.summaryStale);
     nodes.push({
@@ -1247,55 +1258,273 @@ async function handleConnectTap(toId) {
   updateRefreshNudge();
 }
 
-// --- Outline ---
+// --- Outline (Trello-style columns) ---
 
 function renderOutline() {
+  // Tear down any previous outline DOM
   els.outlineList.innerHTML = "";
-  const scenes = [...state.cards.values()]
-    .filter(c => c.type === "scene" && !c.archived)
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  const beats = [...state.cards.values()]
-    .filter(c => c.type === "beat" && !c.archived)
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  document.getElementById("beatSpine")?.remove();
+  document.getElementById("outlineBoard")?.remove();
 
-  renderPrologueSection();
-  renderBeatSpine(beats, scenes);
+  const columns = getColumnsForProject(state.project);
 
-  if (scenes.length === 0) {
-    show(els.outlineEmpty);
-    els.outlineList.appendChild(makePlusButton(null, null, null));
-    return;
+  // Build a board container that holds all columns horizontally.
+  const board = document.createElement("div");
+  board.id = "outlineBoard";
+  board.className = "outline-board";
+  els.outlineList.parentNode.insertBefore(board, els.outlineList);
+
+  // Cards (scenes + beats) for the outline, grouped by column.
+  const cardsByColumn = new Map(); // columnId -> [cards]
+  const orphaned = []; // cards whose columnId doesn't match any column
+  const validColumnIds = new Set(columns.map(c => c.id));
+
+  for (const c of state.cards.values()) {
+    if (c.archived) continue;
+    if (c.type !== "scene" && c.type !== "beat") continue;
+    const colId = c.fields?.columnId || "";
+    if (!validColumnIds.has(colId)) {
+      orphaned.push(c);
+      continue;
+    }
+    if (!cardsByColumn.has(colId)) cardsByColumn.set(colId, []);
+    cardsByColumn.get(colId).push(c);
   }
+  for (const arr of cardsByColumn.values()) {
+    arr.sort((a, b) => (a.fields?.columnOrder ?? 0) - (b.fields?.columnOrder ?? 0));
+  }
+
+  for (const col of columns) {
+    board.appendChild(renderColumn(col, cardsByColumn.get(col.id) || []));
+  }
+  if (orphaned.length) {
+    const unassigned = { id: "__unassigned__", label: "Unassigned (from old structure)", isMain: false };
+    board.appendChild(renderColumn(unassigned, orphaned));
+  }
+
+  // The original <ol id="outlineList"> is now empty and not used as the main
+  // surface — but keep it for the (hidden) outlineEmpty fallback.
   hide(els.outlineEmpty);
+}
 
-  // Map each scene to a beat: pick the first beat (by order) that claims it.
-  const sceneToBeat = new Map();
-  for (const beat of beats) {
-    for (const sid of beat.fields?.relatedSceneIds || []) {
-      if (!sceneToBeat.has(sid)) sceneToBeat.set(sid, beat.id);
+function renderColumn(col, cards) {
+  const colEl = document.createElement("section");
+  colEl.className = "outline-column";
+  colEl.dataset.colId = col.id;
+  if (col.isPrologue) colEl.classList.add("col-prologue");
+  if (col.isEpilogue) colEl.classList.add("col-epilogue");
+
+  const head = document.createElement("header");
+  head.className = "outline-col-head";
+  head.innerHTML = `
+    <h3>${esc(col.label)}</h3>
+    <span class="muted small">${cards.length} card${cards.length === 1 ? "" : "s"}</span>
+  `;
+  colEl.appendChild(head);
+
+  const body = document.createElement("div");
+  body.className = "outline-col-body";
+  colEl.appendChild(body);
+
+  // Drop zone covering the whole column, for cross-column drops at the END.
+  colEl.addEventListener("dragover", e => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    colEl.classList.add("drop-target");
+  });
+  colEl.addEventListener("dragleave", e => {
+    if (!colEl.contains(e.relatedTarget)) colEl.classList.remove("drop-target");
+  });
+  colEl.addEventListener("drop", async e => {
+    e.preventDefault();
+    colEl.classList.remove("drop-target");
+    const cardId = e.dataTransfer.getData("text/plain");
+    if (!cardId) return;
+    // If the drop happened on a specific card slot it'll be handled there.
+    // Falling through to here means: drop at the end of this column.
+    if (e.target.closest(".outline-card")) return;
+    await moveCardToColumn(cardId, col.id, /*beforeCardId*/ null);
+    renderOutline();
+  });
+
+  for (const card of cards) {
+    body.appendChild(renderOutlineCard(card, col));
+  }
+
+  const addRow = document.createElement("div");
+  addRow.className = "outline-col-actions";
+  addRow.innerHTML = `
+    <button class="ghost small add-scene">+ Scene</button>
+    <button class="ghost small add-beat">+ Beat</button>
+    <button class="ghost small suggest-scene" title="Have the LLM propose a bridging scene at the end of this column">🎲 Suggest scene</button>
+  `;
+  addRow.querySelector(".add-scene").addEventListener("click", () => createCardInColumn("scene", col.id));
+  addRow.querySelector(".add-beat").addEventListener("click", () => createCardInColumn("beat", col.id));
+  addRow.querySelector(".suggest-scene").addEventListener("click", () => {
+    const lastSceneId = [...cards].reverse().find(c => c.type === "scene")?.id || null;
+    handleScenePlus(lastSceneId, null, col.id);
+  });
+  colEl.appendChild(addRow);
+
+  return colEl;
+}
+
+function renderOutlineCard(card, col) {
+  const el = document.createElement("article");
+  el.className = "outline-card outline-card-" + card.type;
+  el.draggable = true;
+  el.dataset.cardId = card.id;
+  const f = card.fields || {};
+  const stale = (f.ragSummaryStale || f.summaryStale)
+    ? '<span class="stale-icon" title="Summary needs refresh">⚠</span>'
+    : "";
+  const sub = card.type === "beat"
+    ? (f.structurePosition || f.description || f.summary || "")
+    : (f.shortDescription || f.ragSummary || "");
+  el.innerHTML = `
+    <div class="outline-card-head">
+      <span class="badge ${esc(card.type)}">${esc(card.type)}</span>
+      <span class="outline-card-title">${esc(card.title)}</span>
+      ${stale}
+    </div>
+    ${sub ? `<p class="outline-card-sub muted small">${esc(sub)}</p>` : ""}
+  `;
+  el.addEventListener("click", e => {
+    if (e.target.closest(".drag-handle")) return;
+    openCardEditor(card.id);
+  });
+  el.addEventListener("dragstart", e => {
+    e.dataTransfer.setData("text/plain", card.id);
+    e.dataTransfer.effectAllowed = "move";
+    el.classList.add("dragging");
+  });
+  el.addEventListener("dragend", () => el.classList.remove("dragging"));
+  el.addEventListener("dragover", e => {
+    e.preventDefault();
+    const rect = el.getBoundingClientRect();
+    const before = (e.clientY - rect.top) < rect.height / 2;
+    el.classList.toggle("drop-before", before);
+    el.classList.toggle("drop-after", !before);
+  });
+  el.addEventListener("dragleave", () => {
+    el.classList.remove("drop-before", "drop-after");
+  });
+  el.addEventListener("drop", async e => {
+    e.preventDefault();
+    e.stopPropagation();
+    const droppedId = e.dataTransfer.getData("text/plain");
+    el.classList.remove("drop-before", "drop-after");
+    if (!droppedId || droppedId === card.id) return;
+    const rect = el.getBoundingClientRect();
+    const before = (e.clientY - rect.top) < rect.height / 2;
+    await moveCardToColumn(droppedId, col.id, before ? card.id : nextCardIdAfter(card.id, col.id));
+    renderOutline();
+  });
+  return el;
+}
+
+function nextCardIdAfter(cardId, colId) {
+  const cards = [...state.cards.values()]
+    .filter(c => !c.archived && (c.type === "scene" || c.type === "beat") && c.fields?.columnId === colId)
+    .sort((a, b) => (a.fields?.columnOrder ?? 0) - (b.fields?.columnOrder ?? 0));
+  const idx = cards.findIndex(c => c.id === cardId);
+  return idx >= 0 && idx + 1 < cards.length ? cards[idx + 1].id : null;
+}
+
+// Move a card to a given column at a position determined by beforeCardId
+// (null = append to the end). Reassigns columnOrder for affected cards.
+async function moveCardToColumn(cardId, newColId, beforeCardId) {
+  const card = state.cards.get(cardId);
+  if (!card) return;
+  const oldColId = card.fields?.columnId || "";
+  const audits = [];
+
+  // Build the new column's ordering with the dragged card inserted in place.
+  const colCards = [...state.cards.values()]
+    .filter(c => !c.archived && c.id !== cardId && (c.type === "scene" || c.type === "beat") && c.fields?.columnId === newColId)
+    .sort((a, b) => (a.fields?.columnOrder ?? 0) - (b.fields?.columnOrder ?? 0));
+  const insertAt = beforeCardId ? colCards.findIndex(c => c.id === beforeCardId) : colCards.length;
+  const at = insertAt < 0 ? colCards.length : insertAt;
+  colCards.splice(at, 0, card);
+
+  // Reassign columnOrder 0..N and persist any that changed.
+  for (let i = 0; i < colCards.length; i++) {
+    const c = colCards[i];
+    const updates = {};
+    if ((c.fields?.columnOrder ?? -1) !== i) {
+      c.fields = c.fields || {};
+      c.fields.columnOrder = i;
+      updates["fields.columnOrder"] = i;
+    }
+    if (c.id === cardId && oldColId !== newColId) {
+      c.fields.columnId = newColId;
+      updates["fields.columnId"] = newColId;
+    }
+    if (Object.keys(updates).length === 0) continue;
+    updates.updatedAt = serverTimestamp();
+    await updateDoc(doc(db, "users", state.user.uid, "projects", projectId, "cards", c.id), updates);
+    if (c.id === cardId && oldColId !== newColId) {
+      audits.push({ entityType: "card", entityId: c.id, field: "columnId", oldValue: oldColId, newValue: newColId });
     }
   }
+  if (audits.length) await logAudit(state.user.uid, projectId, audits, state.project);
+  await touchProject();
+  updateRefreshNudge();
+}
 
-  // Group scenes by beat, preserving scene order within each group.
-  const grouped = new Map(); // beatId → scenes[]
-  const unassigned = [];
-  for (const s of scenes) {
-    const bid = sceneToBeat.get(s.id) || "";
-    if (bid) {
-      if (!grouped.has(bid)) grouped.set(bid, []);
-      grouped.get(bid).push(s);
-    } else {
-      unassigned.push(s);
+async function createCardInColumn(type, colId) {
+  if (type !== "scene" && type !== "beat") return;
+  const title = prompt(`New ${type} title:`);
+  if (!title || !title.trim()) return;
+  const trimmed = title.trim();
+  // Determine columnOrder = max+1 in that column.
+  const existing = [...state.cards.values()]
+    .filter(c => !c.archived && (c.type === "scene" || c.type === "beat") && c.fields?.columnId === colId);
+  const maxOrder = existing.reduce((m, c) => Math.max(m, c.fields?.columnOrder ?? -1), -1);
+  const data = {
+    type,
+    title: trimmed,
+    archived: false,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    order: 0,
+    fields: {
+      ...blankFieldsForType(type),
+      columnId: colId,
+      columnOrder: maxOrder + 1
     }
-  }
+  };
+  const ref = await addDoc(collection(db, "users", state.user.uid, "projects", projectId, "cards"), data);
+  state.cards.set(ref.id, { id: ref.id, ...data });
+  await logAudit(state.user.uid, projectId, [{
+    entityType: "card", entityId: ref.id, field: "created", oldValue: null, newValue: { type, title: trimmed, columnId: colId }
+  }], state.project);
+  await touchProject();
+  renderOutline();
+  rebuildGraphElements();
+  updateRefreshNudge();
+  openCardEditor(ref.id);
+}
 
-  // Render beat groups in beat order, then unassigned at the end.
-  for (const beat of beats) {
-    const group = grouped.get(beat.id) || [];
-    renderOutlineGroup(beat, group);
+// One-time migration: any scene/beat without a columnId gets assigned to the
+// first main-story column of the current structure.
+async function migrateUnassignedColumns() {
+  const defaultId = defaultColumnId(state.project);
+  let migrated = 0;
+  for (const card of state.cards.values()) {
+    if (card.archived) continue;
+    if (card.type !== "scene" && card.type !== "beat") continue;
+    if (card.fields?.columnId) continue;
+    card.fields = card.fields || {};
+    card.fields.columnId = defaultId;
+    if (card.fields.columnOrder == null) card.fields.columnOrder = migrated;
+    await updateDoc(
+      doc(db, "users", state.user.uid, "projects", projectId, "cards", card.id),
+      { "fields.columnId": card.fields.columnId, "fields.columnOrder": card.fields.columnOrder, updatedAt: serverTimestamp() }
+    );
+    migrated++;
   }
-  renderOutlineGroup(null, unassigned);
-  renderEpilogueSection();
+  if (migrated) console.log(`[outline] migrated ${migrated} cards into column "${defaultId}"`);
 }
 
 function renderPrologueSection() {
@@ -1376,38 +1605,11 @@ async function saveFramingField(field, value) {
   updateRefreshNudge();
 }
 
-function renderBeatSpine(beats, scenes) {
-  let spine = document.getElementById("beatSpine");
-  if (!spine) {
-    spine = document.createElement("div");
-    spine.id = "beatSpine";
-    spine.className = "beat-spine";
-    els.outlineList.parentNode.insertBefore(spine, els.outlineList);
-  }
-  spine.innerHTML = "";
-  if (beats.length === 0) {
-    spine.innerHTML = `<p class="muted small">No beats yet. Add a Beat card from the Canvas to mark structural moments above your scenes.</p>`;
-    return;
-  }
-  for (const beat of beats) {
-    const count = scenes.filter(s => (beat.fields?.relatedSceneIds || []).includes(s.id)).length;
-    const card = document.createElement("button");
-    card.className = "beat-spine-card";
-    card.dataset.beatId = beat.id;
-    card.innerHTML = `
-      <div class="beat-spine-title">${esc(beat.title)}</div>
-      ${beat.fields?.structurePosition ? `<div class="beat-spine-position muted small">${esc(beat.fields.structurePosition)}</div>` : ""}
-      <div class="beat-spine-count muted small">${count} scene${count === 1 ? "" : "s"}</div>
-    `;
-    card.addEventListener("click", () => {
-      const target = els.outlineList.querySelector(`[data-beat-group="${beat.id}"]`);
-      target?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-    spine.appendChild(card);
-  }
-}
-
-function renderOutlineGroup(beat, scenes) {
+// Beat spine and beat-grouped outline groups have been replaced by the
+// Trello-style column layout. The functions below are unused but kept as
+// safe no-ops in case any legacy call site sneaks back in.
+function renderBeatSpine() {}
+function renderOutlineGroup_unused(beat, scenes) {
   const header = document.createElement("li");
   header.className = "outline-group-header";
   header.dataset.beatGroup = beat ? beat.id : "unassigned";

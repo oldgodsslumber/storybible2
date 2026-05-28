@@ -50,12 +50,12 @@
         <h3>Add Card</h3>
         <div class="card-type-buttons">
           <button data-type="character">+ Character</button>
-          <button data-type="scene">+ Scene</button>
-          <button data-type="beat">+ Beat</button>
           <button data-type="theme">+ Theme</button>
           <button data-type="location">+ Location</button>
           <button data-type="arc">+ Arc</button>
+          <button data-type="beat">+ Beat</button>
         </div>
+        <p class="muted small">Scenes live in the Outline only — drag them between act columns there.</p>
         <hr />
         <h3>Notes</h3>
         <textarea id="notePanel" placeholder="Dump whatever's in your head. LLM will organize it into cards." rows="8"></textarea>
@@ -70,7 +70,6 @@
       <div class="graph-area">
         <div id="cy"></div>
         <button id="recenterBtn" class="ghost small canvas-recenter-btn" title="Refit graph to view">⤧ Recenter</button>
-        <div id="cardEditor" class="card-editor hidden"></div>
       </div>
     </section>
 
@@ -117,6 +116,9 @@
         </main>
       </div>
     </section>
+
+    <!-- Card editor (floating; usable from Canvas, Outline, anywhere) -->
+    <div id="cardEditor" class="card-editor hidden"></div>
 
     <!-- ARCHIVE VIEW -->
     <section id="archiveView" class="view hidden">

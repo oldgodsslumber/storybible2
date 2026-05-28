@@ -27,6 +27,41 @@ export const STRUCTURE_OPTIONS = [
   { id: "kishotenketsu", label: "Kishōtenketsu (Intro / Development / Twist / Conclusion)" }
 ];
 
+// Map each structure preset to its main-story column labels.
+// Outline columns always have a Prologue first and an Epilogue last,
+// with these acts in between.
+export const STRUCTURE_COLUMNS = {
+  "free":          ["Story"],
+  "3-act":         ["Act 1: Setup", "Act 2: Confrontation", "Act 3: Resolution"],
+  "5-act":         ["Act 1: Exposition", "Act 2: Rising Action", "Act 3: Climax", "Act 4: Falling Action", "Act 5: Denouement"],
+  "save-the-cat":  ["Setup", "Catalyst → Break Into Two", "Break Into Two → Midpoint", "Midpoint → All Is Lost", "All Is Lost → Finale", "Finale"],
+  "heros-journey": ["Departure", "Initiation", "Return"],
+  "kishotenketsu": ["Ki (Intro)", "Shō (Development)", "Ten (Twist)", "Ketsu (Conclusion)"]
+};
+
+// Returns the ordered list of outline columns for a project:
+// [ {id, label, isPrologue, isEpilogue, isMain} ]
+// IDs are stable (prologue, act-1..act-N, epilogue) so cards don't lose
+// their column on a structure change unless the column count shrinks
+// past their index — in which case they end up "Unassigned".
+export function getColumnsForProject(project) {
+  const s = getStorySettings(project);
+  const mainLabels = STRUCTURE_COLUMNS[s.structure] || STRUCTURE_COLUMNS["5-act"];
+  const cols = [];
+  cols.push({ id: "prologue", label: "Prologue", isPrologue: true, isMain: false, isEpilogue: false });
+  mainLabels.forEach((label, idx) => {
+    cols.push({ id: `act-${idx + 1}`, label, isPrologue: false, isMain: true, isEpilogue: false });
+  });
+  cols.push({ id: "epilogue", label: "Epilogue", isPrologue: false, isMain: false, isEpilogue: true });
+  return cols;
+}
+
+// Default column for new scenes/beats: the first main-story column.
+export function defaultColumnId(project) {
+  const cols = getColumnsForProject(project);
+  return cols.find(c => c.isMain)?.id || "act-1";
+}
+
 export function getStorySettings(project) {
   return {
     ...DEFAULT_STORY_SETTINGS,

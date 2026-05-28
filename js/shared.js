@@ -95,7 +95,7 @@ export function blankFieldsForType(type) {
     case "character":
       return { role: "", physicalDescription: "", age: "", history: [], traits: [], storyRoleSummary: null, storyRoleSummaryStale: false };
     case "scene":
-      return { shortDescription: "", longDescription: "", ragSummary: null, ragSummaryStale: false, characterIds: [], locationIds: [], arcIds: [], kanbanStage: "idea" };
+      return { shortDescription: "", longDescription: "", ragSummary: null, ragSummaryStale: false, characterIds: [], locationIds: [], arcIds: [], kanbanStage: "idea", columnId: "", columnOrder: 0 };
     case "theme":
       return { description: "" };
     case "location":
@@ -106,7 +106,9 @@ export function blankFieldsForType(type) {
       return {
         description: "",
         structurePosition: "",  // e.g. "Act 1 — Inciting Incident", "Midpoint", "Climax", "Save the Cat: Catalyst"
-        order: 0,               // numeric — used to sort beats along the story
+        order: 0,
+        columnId: "",           // which outline column this beat belongs to
+        columnOrder: 0,         // position within that column
         relatedSceneIds: [],
         relatedArcIds: [],
         summary: "",
