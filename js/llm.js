@@ -200,11 +200,29 @@ export function parseJsonLoose(text) {
         if (depth === 0) {
           const slice = trimmed.slice(start, i + 1);
           try { return JSON.parse(slice); } catch (e) {
-            throw new Error("Could not parse JSON from LLM output: " + e.message);
+            console.error("[parseJsonLoose] JSON.parse failed on slice:", slice);
+            throw new Error(buildParseError(e, slice, trimmed));
           }
         }
       }
     }
   }
-  throw new Error("No JSON found in LLM output.");
+  console.error("[parseJsonLoose] no JSON object/array found in LLM output:", trimmed);
+  throw new Error(buildParseError(null, null, trimmed));
+}
+
+function buildParseError(jsonErr, slice, fullText) {
+  const ellipsisLikely = /\[\s*\.{2,3}/.test(fullText) || /:\s*"\.{3}"/.test(fullText) || /"\.\.\."/.test(fullText);
+  const lines = [];
+  if (jsonErr) lines.push(`Could not parse JSON from LLM output: ${jsonErr.message}`);
+  else        lines.push("No JSON object found in LLM output.");
+  if (ellipsisLikely) {
+    lines.push("");
+    lines.push("It looks like the model returned the schema template literally — with \"...\" placeholders instead of real content. This is common with smaller local models.");
+    lines.push("Try a stronger model, lower the temperature in Settings, or shrink the idea-dump to reduce prompt size.");
+  }
+  lines.push("");
+  lines.push("Model returned (first 600 chars):");
+  lines.push((fullText || "").slice(0, 600));
+  return lines.join("\n");
 }
