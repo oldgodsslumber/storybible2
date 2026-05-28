@@ -599,9 +599,11 @@ function switchView(name) {
     show(els.outlineView);
     renderOutline();
   } else {
-    // Strip beat spine if it was rendered for the outline; switching views
-    // shouldn't leave a stale spine hanging off the outline section's DOM.
+    // Strip outline-only chrome when switching to another view — otherwise
+    // the beat spine and prologue/epilogue sections shadow other views.
     document.getElementById("beatSpine")?.remove();
+    document.getElementById("prologueSection")?.remove();
+    document.getElementById("epilogueSection")?.remove();
   } else if (name === "review") {
     show(els.reviewView);
     maybeShowRefreshNudge();
@@ -1254,6 +1256,7 @@ function renderOutline() {
     .filter(c => c.type === "beat" && !c.archived)
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
+  renderPrologueSection();
   renderBeatSpine(beats, scenes);
 
   if (scenes.length === 0) {
@@ -1290,6 +1293,85 @@ function renderOutline() {
     renderOutlineGroup(beat, group);
   }
   renderOutlineGroup(null, unassigned);
+  renderEpilogueSection();
+}
+
+function renderPrologueSection() {
+  removeFramingSection("prologueSection");
+  const ss = state.project?.storySettings || {};
+  const wrapper = makeFramingSection({
+    id: "prologueSection",
+    label: "Prologue / backstory",
+    helpText: "Diegetic to the world but outside the main story arc. The LLM uses this as context.",
+    value: ss.prologue || "",
+    onSave: async (text) => saveFramingField("prologue", text)
+  });
+  els.outlineList.parentNode.insertBefore(wrapper, document.getElementById("beatSpine") || els.outlineList);
+}
+
+function renderEpilogueSection() {
+  removeFramingSection("epilogueSection");
+  const ss = state.project?.storySettings || {};
+  const wrapper = makeFramingSection({
+    id: "epilogueSection",
+    label: "Epilogue / aftermath",
+    helpText: "What happens after the main story. Treated as world context only — not part of the arc structure.",
+    value: ss.epilogue || "",
+    onSave: async (text) => saveFramingField("epilogue", text)
+  });
+  els.outlineView.appendChild(wrapper);
+}
+
+function makeFramingSection({ id, label, helpText, value, onSave }) {
+  const details = document.createElement("details");
+  details.id = id;
+  details.className = "framing-section";
+  if (value) details.open = true;
+  details.innerHTML = `
+    <summary>
+      <span class="framing-label">${esc(label)}</span>
+      ${value ? `<span class="muted small">${value.length} chars</span>` : `<span class="muted small">empty</span>`}
+    </summary>
+    <p class="muted small">${esc(helpText)}</p>
+    <textarea class="framing-text" rows="6" placeholder="Type or paste…">${esc(value)}</textarea>
+    <p class="muted small framing-save-status"></p>
+  `;
+  const ta = details.querySelector(".framing-text");
+  const status = details.querySelector(".framing-save-status");
+  let saveTimer = null;
+  const triggerSave = () => {
+    clearTimeout(saveTimer);
+    status.textContent = "Saving…";
+    saveTimer = setTimeout(async () => {
+      try {
+        await onSave(ta.value);
+        status.textContent = "Saved.";
+        setTimeout(() => { status.textContent = ""; }, 1500);
+      } catch (err) {
+        status.textContent = "Save failed: " + (err.message || err);
+      }
+    }, 600);
+  };
+  ta.addEventListener("input", triggerSave);
+  ta.addEventListener("blur", triggerSave);
+  return details;
+}
+
+function removeFramingSection(id) {
+  document.getElementById(id)?.remove();
+}
+
+async function saveFramingField(field, value) {
+  state.project.storySettings = state.project.storySettings || {};
+  state.project.storySettings[field] = value;
+  await updateDoc(
+    doc(db, "users", state.user.uid, "projects", projectId),
+    { [`storySettings.${field}`]: value, updatedAt: serverTimestamp() }
+  );
+  await logAudit(state.user.uid, projectId, [{
+    entityType: "project", entityId: projectId, field: `storySettings.${field}`, oldValue: null, newValue: value
+  }], state.project);
+  updateRefreshNudge();
 }
 
 function renderBeatSpine(beats, scenes) {

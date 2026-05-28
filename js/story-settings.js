@@ -13,7 +13,9 @@ export const DEFAULT_STORY_SETTINGS = {
   premise: "",
   structure: "5-act",
   voiceNotes: "",
-  anchorConcepts: []  // [{ term, definition }]
+  anchorConcepts: [], // [{ term, definition }]
+  prologue: "",       // diegetic but outside the main story arc; backstory framing
+  epilogue: ""        // diegetic but outside the main story arc; aftermath framing
 };
 
 export const STRUCTURE_OPTIONS = [
@@ -55,6 +57,14 @@ export function buildProjectContext(project) {
         lines.push(`  • "${a.term}" — ${a.definition || "(no definition yet)"}`);
       }
     }
+    if (s.prologue) {
+      lines.push("Prologue / backstory (diegetic to the world but OUTSIDE the main story arc — use for context and reference, do not fold into structural analysis or arc reviews):");
+      lines.push(s.prologue);
+    }
+    if (s.epilogue) {
+      lines.push("Epilogue / aftermath (diegetic to the world but OUTSIDE the main story arc — use for context only; do not treat as part of the main act structure):");
+      lines.push(s.epilogue);
+    }
     lines.push("Be succinct yet accurate. Don't invent details. Stay consistent with the established terms above.");
     lines.push("=== END PROJECT CONTEXT ===");
     lines.push("");
@@ -92,6 +102,14 @@ export function openStorySettingsModal(state, projectId, { onSaved } = {}) {
 
         <label>Voice / style notes
           <textarea id="ss-voice" rows="2" placeholder="e.g. Spare, character-driven. No purple prose. Scenes lean visual.">${esc(s.voiceNotes)}</textarea>
+        </label>
+
+        <label>Prologue / backstory
+          <textarea id="ss-prologue" rows="4" placeholder="Diegetic to the world but outside the main story arc. e.g. 'Three years before the events of this story, the Curtain Fall settled over the United States...'">${esc(s.prologue)}</textarea>
+        </label>
+
+        <label>Epilogue / aftermath
+          <textarea id="ss-epilogue" rows="4" placeholder="What happens after the main story ends. The LLM will treat this as world context, not part of the arc structure.">${esc(s.epilogue)}</textarea>
         </label>
 
         <div class="ss-anchors">
@@ -151,7 +169,9 @@ export function openStorySettingsModal(state, projectId, { onSaved } = {}) {
       premise:    overlay.querySelector("#ss-premise").value.trim(),
       structure:  overlay.querySelector("#ss-structure").value,
       voiceNotes: overlay.querySelector("#ss-voice").value.trim(),
-      anchorConcepts
+      anchorConcepts,
+      prologue:   overlay.querySelector("#ss-prologue").value.trim(),
+      epilogue:   overlay.querySelector("#ss-epilogue").value.trim()
     };
     try {
       await updateDoc(
