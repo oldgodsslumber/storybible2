@@ -457,6 +457,41 @@ async function applyApprovedItems(approved) {
     auditBatch.push({ entityType: "connection", entityId: ref.id, field: "created", oldValue: null, newValue: { fromCardId: fromId, toCardId: toId, label: data.label } });
   }
 
+  // Story Settings — merge into project.storySettings if anything approved.
+  const ssApproved = approved.storySettings || [];
+  if (ssApproved.length) {
+    const current = { ...(state.project.storySettings || {}) };
+    if (!Array.isArray(current.anchorConcepts)) current.anchorConcepts = [];
+    let ssChanged = false;
+    for (const item of ssApproved) {
+      if (item._ssField === "genre" && item.value) {
+        if (current.genre !== item.value) { current.genre = item.value; ssChanged = true; }
+      } else if (item._ssField === "premise" && item.value) {
+        if (current.premise !== item.value) { current.premise = item.value; ssChanged = true; }
+      } else if (item._ssField === "anchor" && item.term) {
+        const existing = current.anchorConcepts.find(a => a.term.toLowerCase() === item.term.toLowerCase());
+        if (existing) {
+          if (existing.definition !== item.definition && item.definition) {
+            existing.definition = item.definition;
+            ssChanged = true;
+          }
+        } else {
+          current.anchorConcepts.push({ term: item.term, definition: item.definition || "" });
+          ssChanged = true;
+        }
+      }
+    }
+    if (ssChanged) {
+      state.project.storySettings = current;
+      await updateDoc(doc(db, "users", state.user.uid, "projects", projectId), {
+        storySettings: current,
+        updatedAt: serverTimestamp()
+      });
+      auditBatch.push({ entityType: "project", entityId: projectId, field: "storySettings", oldValue: null, newValue: current });
+      console.log("[apply] storySettings merged", current);
+    }
+  }
+
   if (auditBatch.length) {
     await logAudit(state.user.uid, projectId, auditBatch, state.project);
   }

@@ -11,7 +11,7 @@ function context() { return buildProjectContext(STATE_REF?.project); }
 
 // ---------- Prompts ----------
 
-const EXTRACTION_SYSTEM = `You are an assistant for a story bible app. Your job is to read raw creative writing notes and identify story entities.
+const EXTRACTION_SYSTEM = `You are an assistant for a story bible app. Your job is to read raw creative writing notes and identify story entities AND project-level metadata.
 
 CRITICAL DISTINCTION:
 - EXTRACTION: a fact stated directly in the text. ("Jack climbs towers" → Jack is a character; he climbs towers.)
@@ -19,16 +19,26 @@ CRITICAL DISTINCTION:
 
 Be conservative. Prefer extraction over inference. When in doubt, mark as inference. Do not invent details.
 
+You will also propose values for Story Settings — project-level metadata:
+- genre: short phrase describing the genre / setting ("modern science fiction", "noir thriller", "high fantasy", etc.)
+- premise: one-sentence high-concept hook
+- anchorConcepts: proper-noun terms the writer coined that should always be referred to by that exact name (e.g. "Curtain Fall" — the giant stormcloud covering the United States). Treat ALL-CAPS or quoted proper nouns as strong candidates.
+
 Return ONLY a JSON object with this exact shape:
 {
   "characters": [{"name": "...", "role": "", "traits": [], "history": [], "source": "extraction|inference", "rationale": "one short sentence"}],
   "locations":  [{"name": "...", "description": "", "source": "extraction|inference", "rationale": "..."}],
   "themes":     [{"name": "...", "description": "", "source": "extraction|inference", "rationale": "..."}],
+  "storySettings": {
+    "genre":   {"value": "...", "source": "extraction|inference", "rationale": "..."},
+    "premise": {"value": "...", "source": "extraction|inference", "rationale": "..."},
+    "anchorConcepts": [{"term": "...", "definition": "...", "source": "extraction|inference", "rationale": "..."}]
+  },
   "connections":[{"from": "name", "to": "name", "label": "appears in|conflicts with|explores theme|...", "source": "extraction|inference", "rationale": "..."}]
 }
 
 - "name" values for connections must match a "name" field in characters/locations/themes you returned, or one of the existingEntities provided.
-- Omit fields you have no data for (empty arrays/strings are fine).
+- For storySettings: if you have no signal at all for a field, omit it (or set "value": ""). Don't fabricate to fill slots.
 - No prose outside the JSON.`;
 
 const NOTE_PARSE_SYSTEM = `You are an assistant for a story bible app. The writer is dumping a freeform note into a side panel. You will receive the note and a list of existing entities in the project.
@@ -37,6 +47,7 @@ Your job: identify
 1. NEW entities to add (characters, locations, themes)
 2. UPDATES to existing entities (a new trait, a piece of history, a description change)
 3. New CONNECTIONS between entities
+4. STORY SETTINGS proposals — if the note clarifies the project's genre, premise, or introduces a new anchor concept (proper-noun term that should always be referred to by that exact name), propose them.
 
 Same EXTRACTION vs. INFERENCE rule applies: only mark "extraction" if the writer actually said it.
 
@@ -46,10 +57,16 @@ Return ONLY this JSON shape:
   "newLocations":  [{"name": "...", "description": "", "source": "extraction|inference", "rationale": "..."}],
   "newThemes":     [{"name": "...", "description": "", "source": "extraction|inference", "rationale": "..."}],
   "updates":       [{"entityName": "...", "entityType": "character|location|theme", "field": "traits|history|role|description", "addValue": "string or bullet text", "source": "extraction|inference", "rationale": "..."}],
+  "storySettings": {
+    "genre":   {"value": "...", "source": "extraction|inference", "rationale": "..."},
+    "premise": {"value": "...", "source": "extraction|inference", "rationale": "..."},
+    "anchorConcepts": [{"term": "...", "definition": "...", "source": "extraction|inference", "rationale": "..."}]
+  },
   "connections":   [{"from": "name", "to": "name", "label": "...", "source": "extraction|inference", "rationale": "..."}]
 }
 
-No prose outside the JSON.`;
+- Omit storySettings fields you have no signal for. Don't invent a genre.
+- No prose outside the JSON.`;
 
 const GAP_ANALYSIS_SYSTEM = `You are an assistant for a story bible app. The writer has provided an idea dump and the system has extracted some entities. Your job is to ask the writer 3–7 short, specific questions that fill the most important narrative gaps.
 
@@ -158,21 +175,53 @@ function collectApprovalItems(parsed) {
   const themes     = parsed.themes     || parsed.newThemes     || [];
   const updates    = parsed.updates    || [];
   const connections = parsed.connections || [];
-  return { characters, locations, themes, updates, connections };
+  // Story Settings — flatten into a single section of pickable items.
+  const storySettings = [];
+  const ss = parsed.storySettings || {};
+  if (ss.genre && ss.genre.value) {
+    storySettings.push({
+      _ssField: "genre",
+      label: "Genre / setting",
+      value: ss.genre.value,
+      source: ss.genre.source || "inference",
+      rationale: ss.genre.rationale || ""
+    });
+  }
+  if (ss.premise && ss.premise.value) {
+    storySettings.push({
+      _ssField: "premise",
+      label: "Premise",
+      value: ss.premise.value,
+      source: ss.premise.source || "inference",
+      rationale: ss.premise.rationale || ""
+    });
+  }
+  for (const a of (ss.anchorConcepts || [])) {
+    if (!a.term) continue;
+    storySettings.push({
+      _ssField: "anchor",
+      term: a.term,
+      definition: a.definition || "",
+      source: a.source || "extraction",
+      rationale: a.rationale || ""
+    });
+  }
+  return { characters, locations, themes, updates, connections, storySettings };
 }
 
 function emptyApproved() {
-  return { characters: [], locations: [], themes: [], updates: [], connections: [] };
+  return { characters: [], locations: [], themes: [], updates: [], connections: [], storySettings: [] };
 }
 
 function renderApproval(container, state) {
   container.innerHTML = "";
   const sections = [
-    { key: "characters", label: "Characters", render: renderCharacter },
-    { key: "locations",  label: "Locations",  render: renderLocation },
-    { key: "themes",     label: "Themes",     render: renderTheme },
-    { key: "updates",    label: "Updates to existing cards", render: renderUpdate },
-    { key: "connections",label: "Connections", render: renderConnection }
+    { key: "storySettings", label: "Story Settings", render: renderStorySetting },
+    { key: "characters",    label: "Characters",     render: renderCharacter },
+    { key: "locations",     label: "Locations",      render: renderLocation },
+    { key: "themes",        label: "Themes",         render: renderTheme },
+    { key: "updates",       label: "Updates to existing cards", render: renderUpdate },
+    { key: "connections",   label: "Connections",    render: renderConnection }
   ];
   let anyItems = false;
   for (const sec of sections) {
@@ -238,6 +287,14 @@ function renderUpdate(u) {
 function renderConnection(c) {
   return `<div class="approval-name"><strong>${esc(c.from)}</strong> → <strong>${esc(c.to)}</strong></div>
           <div class="small muted">${esc(c.label)}</div>`;
+}
+function renderStorySetting(s) {
+  if (s._ssField === "anchor") {
+    return `<div class="approval-name">Anchor term: <strong>${esc(s.term)}</strong></div>
+            <div class="small muted">${esc(s.definition)}</div>`;
+  }
+  return `<div class="approval-name"><strong>${esc(s.label)}</strong></div>
+          <div class="small muted">${esc(s.value)}</div>`;
 }
 
 // ---------- Gap-Analysis Wizard ----------
