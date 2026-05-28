@@ -173,9 +173,9 @@ async function runIdeaDumpExtractionNow(themeText) {
   const busy = openBusyOverlay("Extracting entities from your idea dump…");
   let parsed;
   try {
-    console.debug("[idea-dump] starting extraction");
+    console.log("[idea-dump] starting extraction");
     parsed = await extractFromIdeaDump(themeText);
-    console.debug("[idea-dump] extraction returned", parsed);
+    console.log("[idea-dump] extraction returned", parsed);
   } catch (err) {
     busy.close();
     console.error("[idea-dump] extraction failed", err);
@@ -204,7 +204,7 @@ async function runIdeaDumpExtractionNow(themeText) {
       let gap;
       try {
         gap = await runGapAnalysis(themeText, parsed);
-        console.debug("[idea-dump] gap analysis returned", gap);
+        console.log("[idea-dump] gap analysis returned", gap);
       } catch (err) {
         gapBusy.close();
         console.error("[idea-dump] gap analysis failed", err);
@@ -214,7 +214,7 @@ async function runIdeaDumpExtractionNow(themeText) {
       gapBusy.close();
       const questions = gap?.questions || [];
       if (questions.length === 0) {
-        console.debug("[idea-dump] no gap questions returned");
+        console.log("[idea-dump] no gap questions returned");
         return;
       }
       openWizardModal(questions, {

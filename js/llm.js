@@ -81,7 +81,7 @@ async function callGemini(s, { system, user, expectJson, temperature, signal }) 
   if (system) body.systemInstruction = { parts: [{ text: system }] };
   if (expectJson) body.generationConfig.responseMimeType = "application/json";
 
-  console.debug("[llm] Gemini POST", { model: s.geminiModel, expectJson });
+  console.log("[llm] Gemini POST", { model: s.geminiModel, expectJson });
   const resp = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -94,7 +94,7 @@ async function callGemini(s, { system, user, expectJson, temperature, signal }) 
   }
   const json = await resp.json();
   const text = json?.candidates?.[0]?.content?.parts?.map(p => p.text).join("") ?? "";
-  console.debug("[llm] Gemini reply", { length: text.length, preview: text.slice(0, 120) });
+  console.log("[llm] Gemini reply", { length: text.length, preview: text.slice(0, 200) });
   if (!text) {
     const finishReason = json?.candidates?.[0]?.finishReason;
     const safety = json?.candidates?.[0]?.safetyRatings;
@@ -115,9 +115,12 @@ async function callOoba(s, { system, user, expectJson, temperature, signal }) {
     temperature,
     max_tokens: 2048
   };
-  if (expectJson) body.response_format = { type: "json_object" };
+  // Note: we used to send response_format:{type:"json_object"} when expectJson
+  // was true, but ooba's OpenAI extension doesn't reliably honor it — some
+  // builds error, others hang. The prompts already instruct "Return ONLY this
+  // JSON" and parseJsonLoose handles fenced/wrapped output, so we leave it off.
 
-  console.debug("[llm] Ooba POST", { url, model: body.model, expectJson });
+  console.log("[llm] Ooba POST", { url, model: body.model, expectJson, promptChars: (system||"").length + user.length });
   let resp;
   try {
     resp = await fetch(url, {
@@ -153,7 +156,10 @@ async function callOoba(s, { system, user, expectJson, temperature, signal }) {
   }
   const json = await resp.json();
   const text = json?.choices?.[0]?.message?.content ?? "";
-  console.debug("[llm] Ooba reply", { length: text.length, preview: text.slice(0, 120) });
+  console.log("[llm] Ooba reply", { length: text.length, preview: text.slice(0, 200) });
+  if (!text) {
+    throw new Error("Ooba returned an empty message. Check the ooba console for an error, or try a different model.");
+  }
   return text;
 }
 
