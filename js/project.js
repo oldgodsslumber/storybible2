@@ -592,18 +592,20 @@ function switchView(name) {
   hide(els.oracleView);
   hideCardEditor();
 
+  // Strip outline-only chrome (beat spine, prologue/epilogue sections) when
+  // switching to any view other than outline. Otherwise they shadow other views.
+  if (name !== "outline") {
+    document.getElementById("beatSpine")?.remove();
+    document.getElementById("prologueSection")?.remove();
+    document.getElementById("epilogueSection")?.remove();
+  }
+
   if (name === "graph") {
     show(els.graphView);
     initOrRefreshGraph();
   } else if (name === "outline") {
     show(els.outlineView);
     renderOutline();
-  } else {
-    // Strip outline-only chrome when switching to another view — otherwise
-    // the beat spine and prologue/epilogue sections shadow other views.
-    document.getElementById("beatSpine")?.remove();
-    document.getElementById("prologueSection")?.remove();
-    document.getElementById("epilogueSection")?.remove();
   } else if (name === "review") {
     show(els.reviewView);
     maybeShowRefreshNudge();
