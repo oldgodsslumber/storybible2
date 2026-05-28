@@ -47,7 +47,7 @@ export function formatDate(ts) {
   return d.toLocaleString();
 }
 
-export const CARD_TYPES = ["character", "scene", "theme", "location", "arc"];
+export const CARD_TYPES = ["character", "scene", "beat", "theme", "location", "arc"];
 
 export const KANBAN_STAGES = [
   { id: "idea",     label: "Idea" },
@@ -102,6 +102,16 @@ export function blankFieldsForType(type) {
       return { description: "" };
     case "arc":
       return { summary: "", summaryStale: false };
+    case "beat":
+      return {
+        description: "",
+        structurePosition: "",  // e.g. "Act 1 — Inciting Incident", "Midpoint", "Climax", "Save the Cat: Catalyst"
+        order: 0,               // numeric — used to sort beats along the story
+        relatedSceneIds: [],
+        relatedArcIds: [],
+        summary: "",
+        summaryStale: false
+      };
     default:
       return {};
   }

@@ -412,6 +412,24 @@ async function applyApprovedItems(approved) {
     added++;
     console.log("[apply] added theme", { id: ref.id, name: t.name });
   }
+  for (const b of approved.beats || []) {
+    if (!b.name) { console.warn("[apply] skipped beat with no name", b); continue; }
+    const data = {
+      type: "beat", title: b.name, archived: false,
+      createdAt: serverTimestamp(), updatedAt: serverTimestamp(), order: 0,
+      fields: {
+        ...blankFieldsForType("beat"),
+        description: b.description || "",
+        structurePosition: b.structurePosition || ""
+      }
+    };
+    const ref = await addDoc(cardsCol, data);
+    state.cards.set(ref.id, { id: ref.id, ...data });
+    nameToCardId.set(b.name.toLowerCase(), ref.id);
+    auditBatch.push({ entityType: "card", entityId: ref.id, field: "created", oldValue: null, newValue: { type: "beat", title: b.name, source: b.source } });
+    added++;
+    console.log("[apply] added beat", { id: ref.id, name: b.name });
+  }
 
   for (const u of approved.updates || []) {
     const targetId = nameToCardId.get((u.entityName || "").toLowerCase());
@@ -707,6 +725,7 @@ function initOrRefreshGraph() {
         },
         { selector: "node[type='character']", style: { "background-color": "#3b5278", "border-color": "#5a7fb8" } },
         { selector: "node[type='scene']",     style: { "background-color": "#5a3b78", "border-color": "#8a5fb8" } },
+        { selector: "node[type='beat']",      style: { "background-color": "#7a652e", "border-color": "#e0b95a", "shape": "diamond", "width": 160, "height": 80 } },
         { selector: "node[type='theme']",     style: { "background-color": "#785a3b", "border-color": "#b88a5f" } },
         { selector: "node[type='location']",  style: { "background-color": "#3b7860", "border-color": "#5fb890" } },
         { selector: "node[type='arc']",       style: { "background-color": "#78443b", "border-color": "#b8685f" } },
@@ -924,6 +943,16 @@ function renderEditor(card) {
   } else if (card.type === "arc") {
     const staleTag = f.summaryStale ? ' <span class="stale-icon" title="Stale — re-run Refresh">⚠ stale</span>' : "";
     typeSpecific = `<label>Summary${staleTag} <textarea data-field="summary" rows="4">${esc(f.summary)}</textarea></label>`;
+  } else if (card.type === "beat") {
+    const staleTag = f.summaryStale ? ' <span class="stale-icon" title="Stale — re-run Refresh">⚠ stale</span>' : "";
+    typeSpecific = `
+      <label>Description <textarea data-field="description" rows="3">${esc(f.description)}</textarea></label>
+      <label>Structure position <input data-field="structurePosition" value="${attr(f.structurePosition)}" placeholder="e.g. Inciting Incident, Midpoint, Act 2 Turn, Catalyst" /></label>
+      <label>Order along the story <input data-field="order" data-top="1" type="number" value="${attr(card.order ?? 0)}" /></label>
+      <label>Summary${staleTag} <textarea data-field="summary" rows="3">${esc(f.summary)}</textarea></label>
+      ${renderMultiTagPicker(card, "relatedSceneIds", "Scenes that implement this beat", "scene")}
+      ${renderMultiTagPicker(card, "relatedArcIds",  "Arcs this beat advances",         "arc")}
+    `;
   }
   return `
     <div class="editor-header">

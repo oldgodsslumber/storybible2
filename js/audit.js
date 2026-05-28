@@ -57,6 +57,11 @@ export function staleImpact(entityType, field) {
       return { self: { field: "ragSummaryStale", value: true } };
     }
   }
+  if (entityType === "card-beat") {
+    if (["description", "structurePosition", "relatedSceneIds", "relatedArcIds"].includes(field)) {
+      return { self: { field: "summaryStale", value: true } };
+    }
+  }
   return null;
 }
 

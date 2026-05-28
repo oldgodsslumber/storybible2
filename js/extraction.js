@@ -24,11 +24,17 @@ You will also propose values for Story Settings — project-level metadata:
 - premise: one-sentence high-concept hook
 - anchorConcepts: proper-noun terms the writer coined that should always be referred to by that exact name (e.g. "Curtain Fall" — the giant stormcloud covering the United States). Treat ALL-CAPS or quoted proper nouns as strong candidates.
 
+And BEATS — structural moments larger than a single scene but smaller than an ongoing subplot:
+- A beat is a discrete turning point: "the inciting incident", "the midpoint reversal", "the dark night of the soul", "Act 2 turn", "climax", "denouement".
+- A beat is NOT a scene (the smallest unit) and NOT an arc (the long throughline). When the writer describes a major moment that organizes several potential scenes, that's a beat.
+- If the writer explicitly lists beats or uses words like "the midpoint", "the climax", "inciting incident", "Act 2 turn", or describes structural turning points, propose them as beats with a structurePosition tag.
+
 Return ONLY a JSON object with this exact shape:
 {
   "characters": [{"name": "...", "role": "", "traits": [], "history": [], "source": "extraction|inference", "rationale": "one short sentence"}],
   "locations":  [{"name": "...", "description": "", "source": "extraction|inference", "rationale": "..."}],
   "themes":     [{"name": "...", "description": "", "source": "extraction|inference", "rationale": "..."}],
+  "beats":      [{"name": "...", "description": "...", "structurePosition": "Inciting Incident|Midpoint|Climax|...", "source": "extraction|inference", "rationale": "..."}],
   "storySettings": {
     "genre":   {"value": "...", "source": "extraction|inference", "rationale": "..."},
     "premise": {"value": "...", "source": "extraction|inference", "rationale": "..."},
@@ -44,10 +50,12 @@ Return ONLY a JSON object with this exact shape:
 const NOTE_PARSE_SYSTEM = `You are an assistant for a story bible app. The writer is dumping a freeform note into a side panel. You will receive the note and a list of existing entities in the project.
 
 Your job: identify
-1. NEW entities to add (characters, locations, themes)
+1. NEW entities to add (characters, locations, themes, beats)
 2. UPDATES to existing entities (a new trait, a piece of history, a description change)
 3. New CONNECTIONS between entities
 4. STORY SETTINGS proposals — if the note clarifies the project's genre, premise, or introduces a new anchor concept (proper-noun term that should always be referred to by that exact name), propose them.
+
+A BEAT is a structural moment between a single scene and an ongoing subplot — "the inciting incident", "the midpoint", "the climax", "Act 2 turn". If the writer describes a major plot pivot that organizes several scenes (rather than a single moment-to-moment scene), propose it as a beat with a structurePosition tag.
 
 Same EXTRACTION vs. INFERENCE rule applies: only mark "extraction" if the writer actually said it.
 
@@ -56,7 +64,8 @@ Return ONLY this JSON shape:
   "newCharacters": [{"name": "...", "role": "", "traits": [], "history": [], "source": "extraction|inference", "rationale": "..."}],
   "newLocations":  [{"name": "...", "description": "", "source": "extraction|inference", "rationale": "..."}],
   "newThemes":     [{"name": "...", "description": "", "source": "extraction|inference", "rationale": "..."}],
-  "updates":       [{"entityName": "...", "entityType": "character|location|theme", "field": "traits|history|role|description", "addValue": "string or bullet text", "source": "extraction|inference", "rationale": "..."}],
+  "newBeats":      [{"name": "...", "description": "...", "structurePosition": "...", "source": "extraction|inference", "rationale": "..."}],
+  "updates":       [{"entityName": "...", "entityType": "character|location|theme|beat", "field": "traits|history|role|description|structurePosition", "addValue": "string or bullet text", "source": "extraction|inference", "rationale": "..."}],
   "storySettings": {
     "genre":   {"value": "...", "source": "extraction|inference", "rationale": "..."},
     "premise": {"value": "...", "source": "extraction|inference", "rationale": "..."},
@@ -168,11 +177,12 @@ export function openApprovalModal(parsed, { title = "Review extracted items", on
 }
 
 function collectApprovalItems(parsed) {
-  // Normalize either idea-dump shape (characters/locations/themes/connections)
-  // or note-parse shape (newCharacters/newLocations/newThemes/updates/connections).
+  // Normalize either idea-dump shape (characters/locations/themes/beats/connections)
+  // or note-parse shape (newCharacters/newLocations/newThemes/newBeats/updates/connections).
   const characters = parsed.characters || parsed.newCharacters || [];
   const locations  = parsed.locations  || parsed.newLocations  || [];
   const themes     = parsed.themes     || parsed.newThemes     || [];
+  const beats      = parsed.beats      || parsed.newBeats      || [];
   const updates    = parsed.updates    || [];
   const connections = parsed.connections || [];
   // Story Settings — flatten into a single section of pickable items.
@@ -206,11 +216,11 @@ function collectApprovalItems(parsed) {
       rationale: a.rationale || ""
     });
   }
-  return { characters, locations, themes, updates, connections, storySettings };
+  return { characters, locations, themes, beats, updates, connections, storySettings };
 }
 
 function emptyApproved() {
-  return { characters: [], locations: [], themes: [], updates: [], connections: [], storySettings: [] };
+  return { characters: [], locations: [], themes: [], beats: [], updates: [], connections: [], storySettings: [] };
 }
 
 function renderApproval(container, state) {
@@ -218,6 +228,7 @@ function renderApproval(container, state) {
   const sections = [
     { key: "storySettings", label: "Story Settings", render: renderStorySetting },
     { key: "characters",    label: "Characters",     render: renderCharacter },
+    { key: "beats",         label: "Beats",          render: renderBeat },
     { key: "locations",     label: "Locations",      render: renderLocation },
     { key: "themes",        label: "Themes",         render: renderTheme },
     { key: "updates",       label: "Updates to existing cards", render: renderUpdate },
@@ -279,6 +290,10 @@ function renderLocation(l) {
 function renderTheme(t) {
   return `<div class="approval-name"><strong>${esc(t.name)}</strong></div>
           ${t.description ? `<div class="small muted">${esc(t.description)}</div>` : ""}`;
+}
+function renderBeat(b) {
+  return `<div class="approval-name"><strong>${esc(b.name)}</strong>${b.structurePosition ? ` <span class="muted small">— ${esc(b.structurePosition)}</span>` : ""}</div>
+          ${b.description ? `<div class="small muted">${esc(b.description)}</div>` : ""}`;
 }
 function renderUpdate(u) {
   return `<div class="approval-name">Update <strong>${esc(u.entityName)}</strong> (${esc(u.entityType)})</div>

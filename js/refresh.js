@@ -32,6 +32,11 @@ const ARC_SUMMARY_SYSTEM = `You are an assistant for a story bible app. Summariz
 Return ONLY this JSON:
 { "summary": "..." }`;
 
+const BEAT_SUMMARY_SYSTEM = `You are an assistant for a story bible app. Summarize a story beat in 1–3 sentences based on its description, its position in the structure, and the scenes that implement it. Keep it tight — beats are structural markers, not full prose.
+
+Return ONLY this JSON:
+{ "summary": "..." }`;
+
 // ---------- Public entry ----------
 
 export async function runGlobalRefresh({ state, projectId, onChanged }) {
@@ -103,9 +108,12 @@ function collectStaleTargets(state) {
       out.push({ kind: "scene", cardId: c.id, title: c.title });
     } else if (c.type === "arc" && c.fields?.summaryStale) {
       out.push({ kind: "arc", cardId: c.id, title: c.title });
+    } else if (c.type === "beat" && c.fields?.summaryStale) {
+      out.push({ kind: "beat", cardId: c.id, title: c.title });
     }
   }
-  // Also flag: characters that have NO storyRoleSummary yet, scenes with longDescription but no ragSummary
+  // Also flag: characters that have NO storyRoleSummary yet, scenes with
+  // longDescription but no ragSummary, beats with description but no summary.
   for (const c of state.cards.values()) {
     if (c.archived) continue;
     if (c.type === "character" && !c.fields?.storyRoleSummary && hasAnyContent(c)) {
@@ -113,6 +121,9 @@ function collectStaleTargets(state) {
     }
     if (c.type === "scene" && !c.fields?.ragSummary && (c.fields?.longDescription || "").trim()) {
       if (!out.find(t => t.cardId === c.id)) out.push({ kind: "scene", cardId: c.id, title: c.title });
+    }
+    if (c.type === "beat" && !c.fields?.summary && (c.fields?.description || "").trim()) {
+      if (!out.find(t => t.cardId === c.id)) out.push({ kind: "beat", cardId: c.id, title: c.title });
     }
   }
   return out;
@@ -179,6 +190,28 @@ async function generateSummary(target, state) {
       recentChanges: changes
     };
     const out = await callBatched(ARC_SUMMARY_SYSTEM, ctx);
+    return { field: "summary", value: out.summary || "" };
+  }
+
+  if (target.kind === "beat") {
+    const scenesInBeat = [...state.cards.values()].filter(
+      c => c.type === "scene" && !c.archived && (card.fields?.relatedSceneIds || []).includes(c.id)
+    );
+    const ctx = {
+      beat: {
+        title: card.title,
+        description: card.fields?.description || "",
+        structurePosition: card.fields?.structurePosition || "",
+        currentSummary: card.fields?.summary || ""
+      },
+      scenesInBeat: scenesInBeat.map(s => ({
+        title: s.title,
+        shortDescription: s.fields?.shortDescription || "",
+        ragSummary: s.fields?.ragSummary || ""
+      })),
+      recentChanges: changes
+    };
+    const out = await callBatched(BEAT_SUMMARY_SYSTEM, ctx);
     return { field: "summary", value: out.summary || "" };
   }
 
@@ -298,7 +331,8 @@ async function writeSummary(state, projectId, target, accepted) {
   const staleField =
     target.kind === "character" ? "storyRoleSummaryStale" :
     target.kind === "scene" ? "ragSummaryStale" :
-    target.kind === "arc" ? "summaryStale" : null;
+    target.kind === "arc" ? "summaryStale" :
+    target.kind === "beat" ? "summaryStale" : null;
   const userEditedFlag = `${accepted.field}_userEdited`;
 
   card.fields[accepted.field] = accepted.value;
