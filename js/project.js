@@ -417,23 +417,81 @@ async function applyApprovedItems(approved) {
     added++;
     console.log("[apply] added theme", { id: ref.id, name: t.name });
   }
+  // Resolve column hints for scenes and beats. The LLM might return a
+  // column ID, a label, or nonsense — fall back to the default main column
+  // when no valid match. columnOrder is max+1 within the chosen column so
+  // newly-added cards land at the bottom of the stack.
+  const projectColumns = getColumnsForProject(state.project);
+  const validColumnIds = new Set(projectColumns.map(c => c.id));
+  const fallbackColumnId = defaultColumnId(state.project);
+  const resolveColumn = (hint) => {
+    if (!hint) return fallbackColumnId;
+    const h = String(hint).trim().toLowerCase();
+    if (validColumnIds.has(h)) return h;
+    // Allow label match: "Act 1: Exposition" → act-1
+    const byLabel = projectColumns.find(c => c.label.toLowerCase() === h);
+    if (byLabel) return byLabel.id;
+    // Allow short label match: "act 1" → act-1
+    const byShort = projectColumns.find(c => c.label.toLowerCase().startsWith(h));
+    if (byShort) return byShort.id;
+    console.warn("[apply] columnHint did not match any column; falling back to default", { hint, fallbackColumnId });
+    return fallbackColumnId;
+  };
+  const columnOrderCounters = {}; // colId -> next columnOrder to use
+  const initCounter = (colId) => {
+    if (columnOrderCounters[colId] != null) return;
+    const max = [...state.cards.values()]
+      .filter(c => !c.archived && (c.type === "scene" || c.type === "beat") && c.fields?.columnId === colId)
+      .reduce((m, c) => Math.max(m, c.fields?.columnOrder ?? -1), -1);
+    columnOrderCounters[colId] = max + 1;
+  };
+
   for (const b of approved.beats || []) {
     if (!b.name) { console.warn("[apply] skipped beat with no name", b); continue; }
+    const colId = resolveColumn(b.columnHint);
+    initCounter(colId);
     const data = {
       type: "beat", title: b.name, archived: false,
       createdAt: serverTimestamp(), updatedAt: serverTimestamp(), order: 0,
       fields: {
         ...blankFieldsForType("beat"),
         description: b.description || "",
-        structurePosition: b.structurePosition || ""
+        structurePosition: b.structurePosition || "",
+        columnId: colId,
+        columnOrder: columnOrderCounters[colId]++
       }
     };
     const ref = await addDoc(cardsCol, data);
     state.cards.set(ref.id, { id: ref.id, ...data });
     nameToCardId.set(b.name.toLowerCase(), ref.id);
-    auditBatch.push({ entityType: "card", entityId: ref.id, field: "created", oldValue: null, newValue: { type: "beat", title: b.name, source: b.source } });
+    auditBatch.push({ entityType: "card", entityId: ref.id, field: "created", oldValue: null, newValue: { type: "beat", title: b.name, columnId: colId, source: b.source } });
     added++;
-    console.log("[apply] added beat", { id: ref.id, name: b.name });
+    console.log("[apply] added beat", { id: ref.id, name: b.name, columnId: colId });
+  }
+
+  for (const s of approved.scenes || []) {
+    if (!s.name) { console.warn("[apply] skipped scene with no name", s); continue; }
+    const colId = resolveColumn(s.columnHint);
+    initCounter(colId);
+    const data = {
+      type: "scene", title: s.name, archived: false,
+      createdAt: serverTimestamp(), updatedAt: serverTimestamp(), order: 0,
+      fields: {
+        ...blankFieldsForType("scene"),
+        shortDescription: s.shortDescription || "",
+        longDescription:  s.longDescription  || "",
+        ragSummary:       s.shortDescription || null,
+        ragSummaryStale:  !!s.longDescription,
+        columnId: colId,
+        columnOrder: columnOrderCounters[colId]++
+      }
+    };
+    const ref = await addDoc(cardsCol, data);
+    state.cards.set(ref.id, { id: ref.id, ...data });
+    nameToCardId.set(s.name.toLowerCase(), ref.id);
+    auditBatch.push({ entityType: "card", entityId: ref.id, field: "created", oldValue: null, newValue: { type: "scene", title: s.name, columnId: colId, source: s.source } });
+    added++;
+    console.log("[apply] added scene", { id: ref.id, name: s.name, columnId: colId });
   }
 
   for (const u of approved.updates || []) {

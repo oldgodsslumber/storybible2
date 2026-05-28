@@ -100,6 +100,19 @@ export function buildProjectContext(project) {
       lines.push("Epilogue / aftermath (diegetic to the world but OUTSIDE the main story arc — use for context only; do not treat as part of the main act structure):");
       lines.push(s.epilogue);
     }
+    // Outline columns — so the LLM knows where scenes/beats can be placed
+    // and can return a columnHint that the app can honor when creating cards.
+    const cols = getColumnsForProject(project);
+    if (cols.length) {
+      lines.push("Outline columns — when proposing a scene or beat, set its `columnHint` to one of these column IDs:");
+      for (const c of cols) {
+        const tag = c.isPrologue ? " (framing — outside main arc)"
+                  : c.isEpilogue ? " (framing — outside main arc)"
+                  : "";
+        lines.push(`  • ${c.id} — ${c.label}${tag}`);
+      }
+      lines.push("If you can't tell which column fits, use \"" + (cols.find(x => x.isMain)?.id || "act-1") + "\".");
+    }
     lines.push("Be succinct yet accurate. Don't invent details. Stay consistent with the established terms above.");
     lines.push("=== END PROJECT CONTEXT ===");
     lines.push("");
