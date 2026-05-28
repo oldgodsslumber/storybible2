@@ -28,6 +28,14 @@ els.newProjectBtn.addEventListener("click", () => goNewProject());
 els.cancelNewProjectBtn.addEventListener("click", () => goDashboard());
 els.createProjectBtn.addEventListener("click", createProject);
 
+console.log("[init] dashboard.js wiring", {
+  hasSignInBtn: !!els.signInBtn,
+  hasNewProjectBtn: !!els.newProjectBtn,
+  hasCreateProjectBtn: !!els.createProjectBtn,
+  hasIdeaDump: !!els.ideaDump,
+  hasProjectTitle: !!els.projectTitle
+});
+
 onAuthChange(async user => {
   currentUser = user;
   renderUserArea(els.userArea, user);
@@ -100,12 +108,18 @@ async function loadProjects() {
 }
 
 async function createProject() {
+  console.log("[dashboard] Create Project clicked");
   const title = els.projectTitle.value.trim();
   if (!title) {
     alert("Give the project a title.");
     return;
   }
   const themeText = els.ideaDump.value.trim();
+  console.log("[dashboard] createProject", { titleChars: title.length, themeChars: themeText.length });
+  if (!themeText) {
+    const ok = confirm(`Heads up: you haven't typed anything in the "What's your story about?" textarea.\n\nWithout idea-dump text, the LLM has nothing to extract — you'll land on an empty project. You can paste an idea dump into the side panel later and click "Parse with LLM" instead.\n\nCreate empty project anyway?`);
+    if (!ok) return;
+  }
   els.createProjectBtn.disabled = true;
   try {
     const projectsRef = collection(db, "users", currentUser.uid, "projects");
