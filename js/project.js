@@ -144,9 +144,19 @@ async function loadProject() {
   hide(els.loading);
   switchView("graph");
   updateRefreshNudge();
-  if ((state.project.themeText || "").trim() && els.rerunExtractBtn) {
+  if (els.rerunExtractBtn) {
     els.rerunExtractBtn.classList.remove("hidden");
+    const hasText = !!(state.project.themeText || "").trim();
+    if (!hasText) {
+      els.rerunExtractBtn.title = "This project has no idea-dump text.";
+    }
   }
+  console.log("[project] loaded", {
+    cards: state.cards.size,
+    connections: state.connections.size,
+    themeTextChars: (state.project.themeText || "").length,
+    auditEntries: (state.project.auditTrail || []).length
+  });
   if (isNewProject) {
     history.replaceState({}, "", `./project.html?id=${encodeURIComponent(projectId)}`);
     await maybeRunIdeaDumpExtraction();
@@ -154,9 +164,14 @@ async function loadProject() {
 }
 
 async function maybeRunIdeaDumpExtraction() {
+  console.log("[idea-dump] auto-trigger on new project");
   const themeText = (state.project.themeText || "").trim();
-  if (!themeText) return;
+  if (!themeText) {
+    console.log("[idea-dump] aborted: project has no themeText");
+    return;
+  }
   if (!isConfigured()) {
+    console.log("[idea-dump] aborted: no LLM provider configured");
     const wantConfigure = confirm("You have an idea dump but no LLM provider is configured.\n\nConfigure one now to extract characters, locations, and themes?\n\nCancel = work manually for now (you can run extraction later from the side panel.)");
     if (wantConfigure) openSettingsModal();
     return;
@@ -165,9 +180,16 @@ async function maybeRunIdeaDumpExtraction() {
 }
 
 async function runIdeaDumpExtractionNow(themeText) {
+  console.log("[idea-dump] runIdeaDumpExtractionNow called", { providedText: !!themeText });
   if (!themeText) themeText = (state.project.themeText || "").trim();
   if (!themeText) {
-    alert("This project has no idea-dump text to extract from.");
+    console.log("[idea-dump] aborted: no themeText on project");
+    alert("This project has no idea-dump text to extract from. Create a new project from the dashboard and type your idea dump in the big text field.");
+    return;
+  }
+  if (!isConfigured()) {
+    console.log("[idea-dump] aborted: no LLM provider configured");
+    alert("No LLM provider configured. Open ⚙ Settings to set one up.");
     return;
   }
   const busy = openBusyOverlay("Extracting entities from your idea dump…");
@@ -232,8 +254,13 @@ async function runIdeaDumpExtractionNow(themeText) {
 }
 
 async function parseNoteHandler() {
+  console.log("[parse-note] button clicked");
   const text = els.notePanel.value.trim();
-  if (!text) return;
+  if (!text) {
+    console.log("[parse-note] aborted: notepad is empty");
+    alert("Type something into the note panel first, then click Parse with LLM.");
+    return;
+  }
   if (!isConfigured()) {
     if (confirm("No LLM provider configured. Open Settings?")) openSettingsModal();
     return;
