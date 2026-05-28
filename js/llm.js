@@ -118,12 +118,35 @@ async function callOoba(s, { system, user, expectJson, temperature, signal }) {
   if (expectJson) body.response_format = { type: "json_object" };
 
   console.debug("[llm] Ooba POST", { url, model: body.model, expectJson });
-  const resp = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal
-  });
+  let resp;
+  try {
+    resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal
+    });
+  } catch (err) {
+    // fetch throws TypeError("Failed to fetch") for: CORS block, mixed content,
+    // DNS failure, connection refused, network down. The browser doesn't
+    // distinguish these on purpose — so we build a diagnostic message.
+    if (err?.name === "AbortError" || err?.name === "TimeoutError") throw err;
+    const pageProto = (typeof location !== "undefined" && location.protocol) || "";
+    const urlProto = url.startsWith("https:") ? "https:" : "http:";
+    const mixedContent = pageProto === "https:" && urlProto === "http:";
+    const hints = [];
+    if (mixedContent) {
+      hints.push(`MIXED CONTENT: this page is loaded over HTTPS (${location.origin}) but Ooba is at ${urlProto} — browsers block this. Run the app over http://localhost:PORT instead of GitHub Pages, OR put Ooba behind an HTTPS tunnel (cloudflared / ngrok), OR switch to a remote provider like Gemini.`);
+    } else {
+      hints.push("Ooba isn't reachable from the browser. Most likely causes:");
+      hints.push("  • Ooba isn't running, or not listening on " + base);
+      hints.push("  • The OpenAI extension isn't loaded — start with: python server.py --api --extensions openai (or check the OpenAI extension is enabled in the UI)");
+      hints.push("  • CORS — ooba's openai extension needs to allow your page's origin. Check ooba console for the actual port (default is 5000 for ooba <=1.6, 5005 for newer builds, and the OpenAI endpoint can be on a different port).");
+    }
+    const wrapped = new Error("Ooba fetch failed: " + (err.message || err) + "\n\n" + hints.join("\n"));
+    wrapped.cause = err;
+    throw wrapped;
+  }
   if (!resp.ok) {
     const errText = await resp.text();
     throw new Error(`Ooba error ${resp.status}: ${errText}`);

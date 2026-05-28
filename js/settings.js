@@ -37,7 +37,10 @@ export function openSettingsModal() {
           <legend>Oobabooga (local)</legend>
           <label>Base URL <input id="oobaBaseUrl" type="text" value="${attr(s.oobaBaseUrl)}" placeholder="http://127.0.0.1:5000" /></label>
           <label>Model name <input id="oobaModel" type="text" value="${attr(s.oobaModel)}" placeholder="(any string ooba accepts)" /></label>
-          <p class="muted small">Uses the OpenAI-compatible endpoint at <code>{base}/v1/chat/completions</code>. Start ooba with <code>--api</code>.</p>
+          <p class="muted small">Uses the OpenAI-compatible endpoint at <code>{base}/v1/chat/completions</code>. Start ooba with <code>--api --extensions openai</code>.</p>
+          <p class="muted small" id="oobaMixedWarning" style="color: var(--warn); display: none;">
+            ⚠ This page is loaded over HTTPS but Ooba is at <code>http://</code>. The browser will block these requests (mixed content). Run the app locally via <code>python -m http.server 8000</code> and visit <code>http://localhost:8000</code>, or expose Ooba via an HTTPS tunnel.
+          </p>
         </fieldset>
 
         <label>Temperature
@@ -65,7 +68,17 @@ export function openSettingsModal() {
     overlay.querySelector("#geminiFields").style.display = providerSel.value === "gemini" ? "" : "none";
     overlay.querySelector("#oobaFields").style.display = providerSel.value === "ooba" ? "" : "none";
     setStatus("idle", "Not tested");
+    // Mixed-content warning for ooba over HTTPS pages
+    const warn = overlay.querySelector("#oobaMixedWarning");
+    if (warn) {
+      const url = overlay.querySelector("#oobaBaseUrl").value || "http://";
+      const showWarn = providerSel.value === "ooba"
+        && location.protocol === "https:"
+        && url.startsWith("http://");
+      warn.style.display = showWarn ? "" : "none";
+    }
   };
+  overlay.querySelector("#oobaBaseUrl")?.addEventListener("input", refresh);
   providerSel.addEventListener("change", refresh);
   refresh();
 
