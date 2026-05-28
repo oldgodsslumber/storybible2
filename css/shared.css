@@ -59,7 +59,14 @@ button.danger:hover { background: rgba(217,106,106,0.12); }
 button.small { padding: 4px 10px; font-size: 13px; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 
-input, textarea {
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="search"],
+input[type="number"],
+input[type="url"],
+input:not([type]),
+textarea {
   background: var(--bg-elev);
   color: var(--text);
   border: 1px solid var(--border);
@@ -70,7 +77,20 @@ input, textarea {
   width: 100%;
 }
 textarea { resize: vertical; line-height: 1.5; }
-input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="email"]:focus,
+input[type="search"]:focus,
+input[type="number"]:focus,
+input[type="url"]:focus,
+input:not([type]):focus,
+textarea:focus { outline: none; border-color: var(--accent); }
+
+input[type="checkbox"], input[type="radio"] {
+  width: auto;
+  margin: 0;
+  accent-color: var(--accent);
+}
 
 label {
   display: block;
