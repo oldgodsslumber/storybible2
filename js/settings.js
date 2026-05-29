@@ -237,10 +237,3 @@ export function mountSettingsButton(container) {
   btn.addEventListener("click", openSettingsModal);
   container.prepend(btn);
 }
-
-function esc(s) {
-  return String(s ?? "").replace(/[&<>"']/g, c => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-  }[c]));
-}
-function attr(s) { return esc(s); }
