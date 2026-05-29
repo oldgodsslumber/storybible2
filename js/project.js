@@ -609,6 +609,49 @@ async function applyApprovedItems(approved) {
 
 async function applyWizardAnswers(answers) {
   if (!answers || answers.length === 0) return;
+
+  // Convert the structured Q+A into a "note" the same way the user would
+  // type one, then run it through parseSidePanelNote so the LLM:
+  //   - turns prose answers into clean trait/history bullets
+  //   - proposes updates to the right cards (matched by question target)
+  //   - surfaces any new entities the writer revealed in their answer
+  //   - shows everything in the approval modal so the writer keeps control
+  // Previously we just appended each answer string verbatim — which gave
+  // raw prose dumps in fields meant for tight bullets.
+  if (isConfigured()) {
+    const noteLines = ["Follow-up answers from the clarification wizard. Use these to update the right cards with clean bullets, not raw prose:"];
+    for (const a of answers) {
+      if (!a.answer) continue;
+      noteLines.push("");
+      const target = a.targetEntityName ? ` (about: ${a.targetEntityName})` : "";
+      noteLines.push(`Q${target}: ${a.question}`);
+      noteLines.push(`A: ${a.answer}`);
+    }
+    const noteText = noteLines.join("\n");
+    const { ok, result: parsed } = await runLLMAction(
+      "Processing wizard answers",
+      () => parseSidePanelNote(noteText, existingEntitySummaries())
+    );
+    if (ok && parsed && typeof parsed === "object") {
+      openApprovalModal(parsed, {
+        title: "Review what the LLM extracted from your wizard answers",
+        onApprove: async (approved) => {
+          try {
+            await applyApprovedItems(approved);
+          } catch (err) {
+            console.error("[wizard-answers] applyApprovedItems failed", err);
+            alert("Saving approved items failed: " + (err.message || err));
+          }
+        }
+      });
+      return;
+    }
+    // If the LLM call failed (alert already shown by runLLMAction), fall
+    // through to the raw-append path below so the writer's answers aren't lost.
+    console.warn("[wizard-answers] LLM processing failed; falling back to raw append so answers aren't lost");
+  }
+
+  // Fallback: append raw answers to target fields. Same behavior as before.
   const nameToCardId = new Map();
   for (const c of state.cards.values()) {
     if (!c.archived) nameToCardId.set(c.title.toLowerCase(), c.id);
@@ -855,10 +898,15 @@ function initOrRefreshGraph() {
         openCardEditor(id);
       }
     });
+    state.cy.on("tap", "edge", evt => {
+      const id = evt.target.id();
+      openConnectionEditor(id);
+    });
     state.cy.on("tap", evt => {
       if (evt.target === state.cy) {
         if (state.connectMode) cancelConnectMode();
         hideCardEditor();
+        hideConnectionEditor();
       }
     });
   }
@@ -1013,6 +1061,92 @@ function hideCardEditor() {
   hide(els.cardEditor);
   els.cardEditor.innerHTML = "";
   state.selectedCardId = null;
+}
+
+// --- Connection editor (click an edge on the canvas to edit/delete) ---
+
+function openConnectionEditor(connId) {
+  const conn = state.connections.get(connId);
+  if (!conn) return;
+  const editor = document.getElementById("connectionEditor");
+  if (!editor) return;
+  const from = state.cards.get(conn.fromCardId);
+  const to = state.cards.get(conn.toCardId);
+  const fromTitle = from?.title || "(unknown)";
+  const toTitle = to?.title || "(unknown)";
+  editor.innerHTML = `
+    <div class="editor-header">
+      <span class="badge">connection</span>
+      <button class="ghost small close-conn-editor" aria-label="Close">✕</button>
+    </div>
+    <p class="muted small"><strong>${esc(fromTitle)}</strong> → <strong>${esc(toTitle)}</strong></p>
+    <label>Label
+      <input type="text" id="connLabelInput" value="${attr(conn.label || "")}" placeholder="e.g. appears in, conflicts with, mentors" />
+    </label>
+    <div class="editor-actions">
+      <button class="primary small save-conn">Save label</button>
+      <button class="danger small delete-conn">Delete connection</button>
+    </div>
+  `;
+  show(editor);
+  hideCardEditor();
+  editor.querySelector(".close-conn-editor").addEventListener("click", hideConnectionEditor);
+  editor.querySelector(".save-conn").addEventListener("click", () => saveConnectionLabel(connId));
+  editor.querySelector(".delete-conn").addEventListener("click", () => deleteConnection(connId));
+  // Enter to save
+  editor.querySelector("#connLabelInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); saveConnectionLabel(connId); }
+  });
+  // Focus the label input so user can type immediately
+  setTimeout(() => editor.querySelector("#connLabelInput")?.focus(), 0);
+}
+
+function hideConnectionEditor() {
+  const editor = document.getElementById("connectionEditor");
+  if (!editor) return;
+  hide(editor);
+  editor.innerHTML = "";
+}
+
+async function saveConnectionLabel(connId) {
+  const conn = state.connections.get(connId);
+  if (!conn) return;
+  const editor = document.getElementById("connectionEditor");
+  const input = editor?.querySelector("#connLabelInput");
+  if (!input) return;
+  const newLabel = input.value.trim();
+  const oldLabel = conn.label || "";
+  if (newLabel === oldLabel) { hideConnectionEditor(); return; }
+  conn.label = newLabel;
+  await updateDoc(
+    doc(db, "users", state.user.uid, "projects", projectId, "connections", connId),
+    { label: newLabel }
+  );
+  await logAudit(state.user.uid, projectId, [{
+    entityType: "connection", entityId: connId, field: "label", oldValue: oldLabel, newValue: newLabel
+  }], state.project);
+  hideConnectionEditor();
+  rebuildGraphElements();
+  await touchProject();
+  updateRefreshNudge();
+}
+
+async function deleteConnection(connId) {
+  const conn = state.connections.get(connId);
+  if (!conn) return;
+  const from = state.cards.get(conn.fromCardId);
+  const to = state.cards.get(conn.toCardId);
+  const label = conn.label || "(no label)";
+  if (!confirm(`Delete connection "${label}" from "${from?.title || "?"}" → "${to?.title || "?"}"?`)) return;
+  await deleteDoc(doc(db, "users", state.user.uid, "projects", projectId, "connections", connId));
+  state.connections.delete(connId);
+  await logAudit(state.user.uid, projectId, [{
+    entityType: "connection", entityId: connId, field: "deleted", oldValue: { ...conn }, newValue: null
+  }], state.project);
+  hideConnectionEditor();
+  rebuildGraphElements();
+  await touchProject();
+  updateRefreshNudge();
 }
 
 function renderEditor(card) {
