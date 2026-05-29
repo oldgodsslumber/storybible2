@@ -247,6 +247,45 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .provider-help a:hover { color: var(--accent-hover); text-decoration: underline; }
 .provider-help p { margin: 0; }
 
+.model-list-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 6px;
+}
+.model-list-results { margin-top: 6px; }
+.model-list {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 0 0;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-elev-2);
+}
+.model-list li { border-bottom: 1px solid var(--border); }
+.model-list li:last-child { border-bottom: none; }
+.model-pick {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 6px 10px;
+  cursor: pointer;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+}
+.model-pick:hover { background: rgba(122,156,255,0.12); }
+.model-pick code {
+  background: transparent;
+  padding: 0;
+  font-size: 13px;
+  color: var(--accent);
+}
+
 .connection-row {
   display: flex;
   align-items: center;

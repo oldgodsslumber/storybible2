@@ -1,5 +1,5 @@
 // Settings modal — open from any page. Persists LLM config to localStorage.
-import { getSettings, saveSettings, callLLM, isConfigured, GEMINI_MODELS } from "./llm.js";
+import { getSettings, saveSettings, callLLM, isConfigured, GEMINI_MODELS, listGeminiModels } from "./llm.js";
 
 const NOTICE_KEY = "storybible.llm.notice.acknowledged";
 const FIRST_VISIT_PROMPT_KEY = "storybible.llm.config-prompt.shown";
@@ -42,11 +42,16 @@ export function openSettingsModal() {
           <legend>Gemini</legend>
           <label>API Key <input id="geminiApiKey" type="password" value="${attr(s.geminiApiKey)}" placeholder="AIza..." /></label>
           <label>Model
-            <input id="geminiModel" type="text" list="geminiModelOptions" value="${attr(s.geminiModel)}" placeholder="gemini-2.5-flash or gemma-3-27b-it…" />
+            <input id="geminiModel" type="text" list="geminiModelOptions" value="${attr(s.geminiModel)}" placeholder="gemini-2.5-flash…" />
             <datalist id="geminiModelOptions">
               ${GEMINI_MODELS.map(m => `<option value="${attr(m.id)}">${esc(m.label)}</option>`).join("")}
             </datalist>
-            <p class="muted small" style="margin-top:4px;">Start typing for suggestions. Any model ID Google lists in AI Studio will work — just paste it here verbatim. Whatever you put here is sent as-is to the v1beta endpoint and shown in the console log when the call fires.</p>
+            <div class="model-list-row">
+              <button type="button" id="listGeminiModelsBtn" class="ghost small">List models my key can use</button>
+              <span id="modelListStatus" class="muted small"></span>
+            </div>
+            <div id="modelListResults" class="model-list-results"></div>
+            <p class="muted small" style="margin-top:4px;">The dropdown shows commonly-available models. Click "List models" above to see exactly which ones your API key has access to (Gemma availability varies by region/project). Whatever you put here is sent verbatim and shown in the console POST log.</p>
           </label>
           <div class="provider-help">
             <strong>How to get a free Gemini API key</strong>
@@ -144,6 +149,49 @@ export function openSettingsModal() {
       temperature: parseFloat(overlay.querySelector("#temperature").value) || 0.3
     };
   }
+
+  overlay.querySelector("#listGeminiModelsBtn")?.addEventListener("click", async () => {
+    const keyInput = overlay.querySelector("#geminiApiKey");
+    const key = keyInput.value.trim();
+    const statusEl = overlay.querySelector("#modelListStatus");
+    const resultsEl = overlay.querySelector("#modelListResults");
+    if (!key) {
+      statusEl.textContent = "Paste an API key first.";
+      return;
+    }
+    statusEl.textContent = "Querying Google…";
+    resultsEl.innerHTML = "";
+    try {
+      const models = await listGeminiModels(key);
+      statusEl.textContent = `${models.length} model${models.length === 1 ? "" : "s"} available.`;
+      if (models.length === 0) {
+        resultsEl.innerHTML = `<p class="muted small">Google returned no models supporting generateContent for this key.</p>`;
+        return;
+      }
+      // Sort: Gemini first, then Gemma, then everything else
+      models.sort((a, b) => {
+        const rank = (m) => m.id.startsWith("gemini-") ? 0 : m.id.startsWith("gemma-") ? 1 : 2;
+        const ra = rank(a), rb = rank(b);
+        if (ra !== rb) return ra - rb;
+        return a.id.localeCompare(b.id);
+      });
+      resultsEl.innerHTML = `
+        <p class="muted small">Click a model to use it:</p>
+        <ul class="model-list">
+          ${models.map(m => `<li><button type="button" class="model-pick" data-id="${attr(m.id)}"><code>${esc(m.id)}</code>${m.displayName ? ` <span class="muted small">— ${esc(m.displayName)}</span>` : ""}</button></li>`).join("")}
+        </ul>
+      `;
+      resultsEl.querySelectorAll(".model-pick").forEach(btn => {
+        btn.addEventListener("click", () => {
+          overlay.querySelector("#geminiModel").value = btn.dataset.id;
+          statusEl.textContent = `Set model to ${btn.dataset.id}.`;
+        });
+      });
+    } catch (err) {
+      statusEl.textContent = "Failed.";
+      resultsEl.innerHTML = `<p class="muted small">${esc(err.message || String(err))}</p>`;
+    }
+  });
 
   overlay.querySelector("#testConnBtn").addEventListener("click", async () => {
     const form = readForm();

@@ -241,6 +241,29 @@ async function callOoba(s, { system, user, expectJson, temperature, signal }) {
 // LLMs sometimes wrap JSON in prose or code fences even when asked not to.
 // Pull out the first balanced JSON object/array.
 
+// Calls Gemini's models.list endpoint to show what's actually available
+// for the configured API key. Used by Settings to take the guesswork
+// out of "is this model supported for me?".
+export async function listGeminiModels(apiKey) {
+  if (!apiKey) throw new Error("API key required.");
+  const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}&pageSize=200`;
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(buildGeminiErrorMessage(resp.status, errText, "(models.list)"));
+  }
+  const json = await resp.json();
+  const models = (json?.models || []).map(m => ({
+    // Returned as "models/gemini-2.5-flash" — strip the prefix for our use
+    id: (m.name || "").replace(/^models\//, ""),
+    displayName: m.displayName || "",
+    description: m.description || "",
+    supports: m.supportedGenerationMethods || []
+  }));
+  // Only show models that actually support generateContent (what we use)
+  return models.filter(m => m.supports.includes("generateContent"));
+}
+
 export function parseJsonLoose(text) {
   if (!text) throw new Error("Empty LLM response.");
   const trimmed = text.trim();
