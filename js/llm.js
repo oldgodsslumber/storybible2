@@ -140,7 +140,7 @@ async function callGemini(s, { system, user, expectJson, temperature, signal }) 
   });
   if (!resp.ok) {
     const errText = await resp.text();
-    throw new Error(`Gemini error ${resp.status}: ${errText}`);
+    throw new Error(buildGeminiErrorMessage(resp.status, errText, s.geminiModel));
   }
   const json = await resp.json();
   const text = json?.candidates?.[0]?.content?.parts?.map(p => p.text).join("") ?? "";
