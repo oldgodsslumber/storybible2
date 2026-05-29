@@ -38,10 +38,37 @@ async function runLLMAction(label, fn) {
 
 // ---------- Prompts ----------
 
-const ARC_REVIEW_SYSTEM = `You are an assistant for a story bible app. Write 2–4 paragraphs of plain prose describing the arc of a single character across the story. Cover: starting point, key turning points, resolution status, and any unresolved tension. Be specific — name scenes when relevant. Do NOT invent events.
+const ARC_REVIEW_SYSTEM = `You are an assistant for a story bible app. Analyze a single character's arc across the story and return four things:
 
-Return ONLY this JSON:
-{ "review": "paragraph text...\\n\\nparagraph text..." }`;
+1. REVIEW — 2–4 paragraphs of plain prose describing the arc: starting point, key turning points, resolution status, and any unresolved tension. Be specific — name scenes when relevant. Do NOT invent events. Use storyRoleSummary and scene summaries that are provided to you; if those exist treat them as canonical.
+
+2. SCENE TYPE GUIDANCE — 1–2 paragraphs of analytical guidance on what KINDS of scenes will move this arc forward. Not specific scenes — general patterns. ("Scenes that put the character in close contact with what they fear most." "Scenes where their old beliefs are tested against a new context." "Scenes that force them to choose between two values they used to hold equally.")
+
+3. RECOMMENDED SCENES — 2–4 concrete scene proposals using existing characters, locations, and themes. Each scene should be specific and grounded in what's already in the bible. Include a columnHint matching one of the outline columns from PROJECT CONTEXT so the writer can drop the scene into the right act.
+
+4. FOIL CHARACTERS — 2–4 character suggestions whose existence would challenge or contribute to the arc philosophically. The point is to surround the arc with people who illuminate it by contrast. If the main character is losing their innocence, good foils include "an adult who never lost it" and "a bitter young kid who lost it too early." Each suggestion should propose a name, role, 2–3 traits, and a rationale that ties to the arc.
+
+Return ONLY this JSON shape:
+{
+  "review": "paragraph text...\\n\\nparagraph text...",
+  "sceneTypeGuidance": "paragraph text...\\n\\nparagraph text...",
+  "recommendedScenes": [
+    {
+      "title": "short scene title",
+      "shortDescription": "1–3 sentence description",
+      "columnHint": "act-1|act-2|...|prologue|epilogue",
+      "rationale": "how this scene moves the arc forward"
+    }
+  ],
+  "foilCharacters": [
+    {
+      "name": "proposed name (or '[unnamed foil]' if you don't want to suggest one)",
+      "role": "short role phrase",
+      "traits": ["trait 1", "trait 2"],
+      "rationale": "how this character philosophically challenges or contributes to the arc"
+    }
+  ]
+}`;
 
 const SYNOPSIS_SYSTEM = `You are an assistant for a story bible app. Write a 3–5 paragraph story synopsis based on the project's scenes, characters, and themes. Plain prose. Faithfully reflect what is on the cards — do NOT invent events. If the story is fragmentary, say so honestly in the synopsis.
 
@@ -332,6 +359,39 @@ export async function saveArcSummary(state, projectId, arcId, newSummary) {
   }], state.project);
 }
 
+// ---------- Create a foil character proposed by the Character Arc Review ----------
+
+export async function createFoilCharacter(state, projectId, foil) {
+  const name = (foil?.name || "").trim();
+  if (!name || name === "[unnamed foil]") {
+    throw new Error("Foil character has no name — give it a name in the editor after creation.");
+  }
+  const data = {
+    type: "character",
+    title: name,
+    archived: false,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    order: 0,
+    fields: {
+      role: foil.role || "",
+      physicalDescription: "",
+      age: "",
+      history: [],
+      traits: Array.isArray(foil.traits) ? foil.traits.slice() : [],
+      storyRoleSummary: foil.rationale || null,
+      storyRoleSummaryStale: !!foil.rationale  // we want this regenerated cleanly on next refresh
+    }
+  };
+  const ref = await addDoc(collection(db, "users", state.user.uid, "projects", projectId, "cards"), data);
+  state.cards.set(ref.id, { id: ref.id, ...data });
+  await logAudit(state.user.uid, projectId, [{
+    entityType: "card", entityId: ref.id, field: "created",
+    oldValue: null, newValue: { type: "character", title: name, source: "foil-suggestion" }
+  }], state.project);
+  return ref.id;
+}
+
 // ---------- Apply trait suggestions ----------
 
 export async function applyTraitSuggestions(state, projectId, characterId, suggestions) {
@@ -424,7 +484,108 @@ function renderCharacterMode(body, state, projectId) {
       () => reviewCharacterArc(state, id)
     );
     if (!ok || !r) { out.innerHTML = ""; return; }
-    out.innerHTML = `<div class="review-prose">${proseToHtml(r.review || "")}</div>`;
+
+    out.innerHTML = `
+      <section class="review-section">
+        <h3>Arc review</h3>
+        <div class="review-prose">${proseToHtml(r.review || "")}</div>
+      </section>
+      ${r.sceneTypeGuidance ? `
+        <section class="review-section">
+          <h3>What kinds of scenes will move this arc</h3>
+          <div class="review-prose">${proseToHtml(r.sceneTypeGuidance)}</div>
+        </section>` : ""}
+      ${Array.isArray(r.recommendedScenes) && r.recommendedScenes.length ? `
+        <section class="review-section">
+          <h3>Recommended scenes</h3>
+          <ul class="review-suggestion-list" id="recScenes">
+            ${r.recommendedScenes.map((s, i) => `
+              <li class="review-suggestion">
+                <div class="review-suggestion-head">
+                  <strong>${esc(s.title || "(untitled)")}</strong>
+                  ${s.columnHint ? `<span class="muted small">→ ${esc(s.columnHint)}</span>` : ""}
+                </div>
+                <p class="muted small">${esc(s.shortDescription || "")}</p>
+                ${s.rationale ? `<p class="muted small"><strong>Why:</strong> ${esc(s.rationale)}</p>` : ""}
+                <button class="ghost small insert-scene" data-idx="${i}">Insert scene</button>
+              </li>
+            `).join("")}
+          </ul>
+        </section>` : ""}
+      ${Array.isArray(r.foilCharacters) && r.foilCharacters.length ? `
+        <section class="review-section">
+          <h3>Foil character suggestions</h3>
+          <p class="muted small">Characters whose existence would illuminate this arc by contrast — different angles on the same theme.</p>
+          <ul class="review-suggestion-list" id="recFoils">
+            ${r.foilCharacters.map((f, i) => `
+              <li class="review-suggestion">
+                <div class="review-suggestion-head">
+                  <strong>${esc(f.name || "(unnamed)")}</strong>
+                  ${f.role ? `<span class="muted small">— ${esc(f.role)}</span>` : ""}
+                </div>
+                ${Array.isArray(f.traits) && f.traits.length ? `<p class="muted small">Traits: ${f.traits.map(esc).join(", ")}</p>` : ""}
+                ${f.rationale ? `<p class="muted small"><strong>Why:</strong> ${esc(f.rationale)}</p>` : ""}
+                <button class="ghost small create-foil" data-idx="${i}">Create character</button>
+              </li>
+            `).join("")}
+          </ul>
+        </section>` : ""}
+    `;
+
+    // Wire up Insert scene buttons
+    out.querySelectorAll(".insert-scene").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const idx = parseInt(btn.dataset.idx, 10);
+        const proposal = r.recommendedScenes[idx];
+        if (!proposal) return;
+        btn.disabled = true;
+        btn.textContent = "Inserting…";
+        try {
+          const newId = await insertGeneratedScene(state, projectId, {
+            title: proposal.title,
+            shortDescription: proposal.shortDescription || "",
+            longDescription: "",
+            rationale: proposal.rationale || "",
+            suggestedCharacterNames: [],
+            suggestedLocationNames: []
+          }, null);
+          // Apply column hint if present
+          if (proposal.columnHint) {
+            const card = state.cards.get(newId);
+            if (card) {
+              card.fields = card.fields || {};
+              card.fields.columnId = proposal.columnHint;
+            }
+          }
+          btn.textContent = "Inserted ✓";
+        } catch (err) {
+          console.error("[review] insert scene failed", err);
+          alert("Could not insert scene: " + (err.message || err));
+          btn.disabled = false;
+          btn.textContent = "Insert scene";
+        }
+      });
+    });
+
+    // Wire up Create foil character buttons
+    out.querySelectorAll(".create-foil").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const idx = parseInt(btn.dataset.idx, 10);
+        const foil = r.foilCharacters[idx];
+        if (!foil) return;
+        btn.disabled = true;
+        btn.textContent = "Creating…";
+        try {
+          await createFoilCharacter(state, projectId, foil);
+          btn.textContent = "Created ✓";
+        } catch (err) {
+          console.error("[review] create foil failed", err);
+          alert("Could not create character: " + (err.message || err));
+          btn.disabled = false;
+          btn.textContent = "Create character";
+        }
+      });
+    });
   });
 }
 

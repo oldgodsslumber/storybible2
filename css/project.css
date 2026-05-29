@@ -310,6 +310,44 @@ body { display: flex; flex-direction: column; height: 100vh; }
 .review-prose p { margin: 0 0 12px; line-height: 1.7; }
 .review-overall { margin-top: 16px; }
 
+.review-section {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.review-section:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+.review-section h3 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+.review-suggestion-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.review-suggestion {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+.review-suggestion-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.review-suggestion p { margin: 4px 0; }
+.review-suggestion button { margin-top: 6px; }
+.review-suggestion button:disabled { opacity: 0.6; cursor: default; }
+
 .arc-block {
   background: var(--bg-elev);
   border: 1px solid var(--border);
