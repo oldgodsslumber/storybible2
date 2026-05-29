@@ -10,7 +10,7 @@ import {
   doc, updateDoc, addDoc, collection, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { callLLM, parseJsonLoose, isConfigured } from "./llm.js";
-import { openSettingsModal } from "./settings.js";
+import { openSettingsModal } from "./settings.js?v=20260530";
 import { logAudit } from "./audit.js";
 import { openBusyOverlay } from "./shared.js";
 import { buildProjectContext } from "./story-settings.js";

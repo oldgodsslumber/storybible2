@@ -5,7 +5,7 @@ import {
   doc, getDoc, getDocs, collection, addDoc, updateDoc, deleteDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { isConfigured, getSettings } from "./llm.js";
-import { openSettingsModal } from "./settings.js";
+import { openSettingsModal } from "./settings.js?v=20260530";
 import {
   extractFromIdeaDump, parseSidePanelNote, runGapAnalysis,
   openApprovalModal, openWizardModal
@@ -20,7 +20,7 @@ import {
 import { renderOracle } from "./oracle.js";
 import { openStorySettingsModal, getColumnsForProject, defaultColumnId } from "./story-settings.js";
 import { provideExtractionStateRef } from "./extraction.js";
-import { mountLlmConfigBanner } from "./settings.js";
+import { mountLlmConfigBanner } from "./settings.js?v=20260530";
 
 const REFRESH_NUDGE_THRESHOLD = 60;
 

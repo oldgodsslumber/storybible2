@@ -42,7 +42,7 @@ Return ONLY this JSON:
 export async function runGlobalRefresh({ state, projectId, onChanged }) {
   if (!isConfigured()) {
     if (confirm("No LLM provider configured. Open Settings?")) {
-      const { openSettingsModal } = await import("./settings.js");
+      const { openSettingsModal } = await import("./settings.js?v=20260530");
       openSettingsModal();
     }
     return;
