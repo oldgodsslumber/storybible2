@@ -1202,6 +1202,7 @@ function renderEditor(card) {
     <div class="editor-actions">
       <button class="ghost small toggle-connect">Connect to…</button>
       ${card.type === "character" ? `<button class="ghost small suggest-traits">Suggest traits…</button>` : ""}
+      <button class="ghost small merge-into" title="Merge this card into another of the same type">Merge into…</button>
       <button class="danger small archive-card">Archive</button>
     </div>
     <p class="muted small">Changes save on blur.</p>
@@ -1285,6 +1286,7 @@ function wireEditor(card) {
   els.cardEditor.querySelector(".archive-card").addEventListener("click", () => archiveCard(card.id));
   els.cardEditor.querySelector(".toggle-connect").addEventListener("click", () => startConnectMode(card.id));
   els.cardEditor.querySelector(".suggest-traits")?.addEventListener("click", () => handleSuggestTraits(card.id));
+  els.cardEditor.querySelector(".merge-into")?.addEventListener("click", () => openMergePicker(card.id));
 }
 
 async function saveTagPicker(cardId, picker) {
@@ -1401,6 +1403,156 @@ async function saveField(cardId, input) {
     newValue: value
   }], state.project);
   updateRefreshNudge();
+}
+
+// Merge this card INTO another card of the same type. The other card stays
+// (becomes the canonical entry); this card's content is folded in, then
+// this card is archived. All connections referencing this card are
+// retargeted to the canonical card so the graph stays correct.
+function openMergePicker(sourceId) {
+  const source = state.cards.get(sourceId);
+  if (!source) return;
+  const candidates = [...state.cards.values()]
+    .filter(c => c.type === source.type && c.id !== source.id && !c.archived)
+    .sort((a, b) => a.title.localeCompare(b.title));
+  if (candidates.length === 0) {
+    alert(`No other ${source.type} cards to merge with.`);
+    return;
+  }
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal merge-picker-modal">
+      <div class="modal-header">
+        <h2>Merge "${esc(source.title)}" into…</h2>
+        <button class="ghost small close-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="muted small">Pick the card you want to keep. "${esc(source.title)}" will be archived and its content (description, traits, history, tags, connections) folded into the one you pick. Cannot be undone via UI, but the archived card stays in the Archive tab.</p>
+        <ul class="merge-candidate-list">
+          ${candidates.map(c => `
+            <li><button type="button" class="merge-pick" data-id="${attr(c.id)}">
+              <strong>${esc(c.title)}</strong>
+              ${c.fields?.role ? `<span class="muted small"> — ${esc(c.fields.role)}</span>` : ""}
+            </button></li>
+          `).join("")}
+        </ul>
+      </div>
+      <div class="modal-actions">
+        <button class="ghost cancel">Cancel</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector(".close-modal").addEventListener("click", close);
+  overlay.querySelector(".cancel").addEventListener("click", close);
+  overlay.querySelectorAll(".merge-pick").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      close();
+      await mergeCards(sourceId, btn.dataset.id);
+    });
+  });
+}
+
+async function mergeCards(sourceId, targetId) {
+  const source = state.cards.get(sourceId);
+  const target = state.cards.get(targetId);
+  if (!source || !target) return;
+  if (source.type !== target.type) {
+    alert("Can only merge cards of the same type.");
+    return;
+  }
+
+  // Merge field-by-field. Arrays union (dedup case-insensitively); strings
+  // concatenate with a separator if both non-empty; primitives prefer target.
+  const tgtFields = target.fields = target.fields || {};
+  const srcFields = source.fields || {};
+  const audits = [];
+  const stringFields = ["role", "physicalDescription", "age", "description", "summary", "shortDescription", "longDescription", "structurePosition", "storyRoleSummary", "ragSummary"];
+  const arrayFields = ["history", "traits", "characterIds", "locationIds", "arcIds", "relatedSceneIds", "relatedArcIds"];
+
+  const updates = {};
+  for (const f of stringFields) {
+    const src = (srcFields[f] || "").trim();
+    if (!src) continue;
+    const tgt = (tgtFields[f] || "").trim();
+    if (!tgt) {
+      tgtFields[f] = src;
+      updates[`fields.${f}`] = src;
+    } else if (!tgt.includes(src)) {
+      tgtFields[f] = tgt + "\n" + src;
+      updates[`fields.${f}`] = tgtFields[f];
+    }
+  }
+  for (const f of arrayFields) {
+    const src = Array.isArray(srcFields[f]) ? srcFields[f] : [];
+    if (src.length === 0) continue;
+    const tgt = Array.isArray(tgtFields[f]) ? tgtFields[f].slice() : [];
+    let changed = false;
+    const seenLower = new Set(tgt.map(v => String(v).toLowerCase()));
+    for (const v of src) {
+      const key = String(v).toLowerCase();
+      if (!seenLower.has(key)) {
+        tgt.push(v);
+        seenLower.add(key);
+        changed = true;
+      }
+    }
+    if (changed) {
+      tgtFields[f] = tgt;
+      updates[`fields.${f}`] = tgt;
+    }
+  }
+  // Mark target's summary stale since content changed
+  if (Object.keys(updates).length > 0) {
+    if (target.type === "character") { tgtFields.storyRoleSummaryStale = true; updates["fields.storyRoleSummaryStale"] = true; }
+    if (target.type === "scene")     { tgtFields.ragSummaryStale       = true; updates["fields.ragSummaryStale"]       = true; }
+    if (target.type === "arc" || target.type === "beat") {
+      tgtFields.summaryStale = true; updates["fields.summaryStale"] = true;
+    }
+    updates.updatedAt = serverTimestamp();
+    await updateDoc(doc(db, "users", state.user.uid, "projects", projectId, "cards", targetId), updates);
+    audits.push({ entityType: "card", entityId: targetId, field: "merged-from", oldValue: null, newValue: { sourceId, sourceTitle: source.title } });
+  }
+
+  // Retarget connections that point to/from source → target
+  for (const conn of [...state.connections.values()]) {
+    let changed = false;
+    const patch = {};
+    if (conn.fromCardId === sourceId) { patch.fromCardId = targetId; conn.fromCardId = targetId; changed = true; }
+    if (conn.toCardId === sourceId)   { patch.toCardId   = targetId; conn.toCardId   = targetId; changed = true; }
+    if (changed) {
+      // Avoid creating a self-loop on the target
+      if (conn.fromCardId === conn.toCardId) {
+        await deleteDoc(doc(db, "users", state.user.uid, "projects", projectId, "connections", conn.id));
+        state.connections.delete(conn.id);
+        audits.push({ entityType: "connection", entityId: conn.id, field: "deleted-during-merge", oldValue: null, newValue: null });
+      } else {
+        await updateDoc(doc(db, "users", state.user.uid, "projects", projectId, "connections", conn.id), patch);
+        audits.push({ entityType: "connection", entityId: conn.id, field: "retargeted-during-merge", oldValue: { from: source.id }, newValue: { from: target.id } });
+      }
+    }
+  }
+
+  // Archive the source card (don't hard-delete — preserves history and audit)
+  await updateDoc(doc(db, "users", state.user.uid, "projects", projectId, "cards", sourceId), {
+    archived: true,
+    "fields.mergedIntoId": targetId,
+    updatedAt: serverTimestamp()
+  });
+  source.archived = true;
+  source.fields = source.fields || {};
+  source.fields.mergedIntoId = targetId;
+  audits.push({ entityType: "card", entityId: sourceId, field: "merged-into", oldValue: null, newValue: targetId });
+
+  await logAudit(state.user.uid, projectId, audits, state.project);
+  await touchProject();
+  hideCardEditor();
+  rebuildGraphElements();
+  updateRefreshNudge();
+  alert(`Merged "${source.title}" into "${target.title}". The merged card is in the Archive tab if you need it back.`);
+  openCardEditor(targetId);
 }
 
 async function archiveCard(cardId) {

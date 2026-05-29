@@ -68,6 +68,13 @@ COVERAGE — be THOROUGH. Capture EVERY entity, update, and connection the write
 A SCENE is the smallest unit — one continuous moment in one location. ("Jack confronts Sara on the rooftop" → scene.)
 A BEAT is a structural moment between a single scene and an ongoing subplot — "the inciting incident", "the midpoint", "the climax", "Act 2 turn". If the writer describes a major plot pivot that organizes several scenes (rather than a single moment-to-moment scene), propose it as a beat with a structurePosition tag.
 
+DEDUPLICATION — MOST IMPORTANT RULE:
+For themes, characters, locations, and beats, SEMANTIC match matters more than exact-name match. Before proposing a NEW entity, check the existing entities list. If your candidate means essentially the same thing as an existing one — even with a different name — propose an UPDATE to the existing one instead of a new entity. Examples:
+  - Existing theme "identity" — note mentions "national identity" → UPDATE the existing theme; don't create a new one.
+  - Existing character "Sara Vasquez" — note mentions "Sara V." → UPDATE Sara Vasquez; don't create a separate Sara V.
+  - Existing location "the dam" — note mentions "Hoover Dam" → UPDATE the existing one (perhaps proposing it be renamed) rather than adding a duplicate.
+A new entity is only justified when no existing entity captures the same concept. Err on the side of UPDATES — duplicates poison the story bible and the writer hates them.
+
 For BOTH new scenes and new beats, include a "columnHint" — the column ID from the Outline columns list in the PROJECT CONTEXT above. Match the writer's words ("during the prologue" → prologue; "in Act 3" → act-3; "after the story ends" → epilogue; "in the midpoint of the second act" → the act containing the midpoint, usually act-2 or act-3). If unclear, use the default main column shown in PROJECT CONTEXT.
 
 Same EXTRACTION vs. INFERENCE rule applies: only mark "extraction" if the writer actually said it.
@@ -146,7 +153,30 @@ export async function runGapAnalysis(themeText, extracted) {
 
 function summarizeExistingEntities(entities) {
   if (!entities || entities.length === 0) return "(none)";
-  return entities.map(e => `- [${e.type}] ${e.title}${e.role ? ` — ${e.role}` : ""}`).join("\n");
+  // Group by type so the LLM can scan for semantic duplicates within each
+  // category (themes are the most prone to duplicates because of phrasing).
+  const grouped = new Map();
+  for (const e of entities) {
+    if (!grouped.has(e.type)) grouped.set(e.type, []);
+    grouped.get(e.type).push(e);
+  }
+  const order = ["theme", "character", "location", "beat", "arc"];
+  const lines = [];
+  for (const type of order) {
+    const items = grouped.get(type);
+    if (!items || items.length === 0) continue;
+    lines.push(`${type.toUpperCase()}S already in the project (do NOT create duplicates of these — UPDATE them instead):`);
+    for (const e of items) {
+      lines.push(`  • ${e.title}${e.role ? ` (${e.role})` : ""}`);
+    }
+  }
+  // Anything outside the named order
+  for (const [type, items] of grouped) {
+    if (order.includes(type)) continue;
+    lines.push(`${type.toUpperCase()}S already in the project:`);
+    for (const e of items) lines.push(`  • ${e.title}`);
+  }
+  return lines.join("\n");
 }
 
 // ---------- Approval Modal ----------
