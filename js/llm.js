@@ -18,21 +18,28 @@ const DEFAULTS = {
 // free-text input with a datalist, so users can also paste any model ID
 // Google offers that's not in this list. IDs are sent verbatim to the
 // :generateContent endpoint.
+//
+// As of mid-2026 Google's free tier is largely restricted to the 2.5
+// family. Older Gemini models and most Gemma variants require paid tier
+// or special enablement and will return 404 / "not enabled in this tier"
+// for most new keys. Use the "List models my key can use" button in
+// Settings to see what's actually available.
 export const GEMINI_MODELS = [
-  // Gemini (proprietary, multimodal)
-  { id: "gemini-2.5-flash",       label: "gemini-2.5-flash — recommended, fast, free tier" },
-  { id: "gemini-2.5-pro",         label: "gemini-2.5-pro — smarter, slower, lower free quota" },
-  { id: "gemini-2.5-flash-lite",  label: "gemini-2.5-flash-lite — cheaper / higher quota" },
-  { id: "gemini-2.0-flash",       label: "gemini-2.0-flash — older but supported" },
-  { id: "gemini-1.5-flash",       label: "gemini-1.5-flash — legacy" },
-  { id: "gemini-1.5-pro",         label: "gemini-1.5-pro — legacy" },
+  // Gemini 2.5 (typically free tier for new keys)
+  { id: "gemini-2.5-flash",       label: "gemini-2.5-flash — recommended, free tier, fast" },
+  { id: "gemini-2.5-pro",         label: "gemini-2.5-pro — free tier, smarter / lower quota" },
+  { id: "gemini-2.5-flash-lite",  label: "gemini-2.5-flash-lite — free tier, cheaper" },
 
-  // Gemma (open weights, often higher free-tier limits than Gemini)
-  { id: "gemma-3-27b-it",         label: "gemma-3-27b-it — Gemma 3 27B, open weights, often higher quota" },
-  { id: "gemma-3-12b-it",         label: "gemma-3-12b-it — Gemma 3 12B" },
-  { id: "gemma-3-4b-it",          label: "gemma-3-4b-it — Gemma 3 4B" },
-  { id: "gemma-3-1b-it",          label: "gemma-3-1b-it — Gemma 3 1B, tiny / fast" },
-  { id: "gemma-2-27b-it",         label: "gemma-2-27b-it — Gemma 2 27B" }
+  // Older / paid-tier only (kept for users who specifically have access)
+  { id: "gemini-2.0-flash",       label: "gemini-2.0-flash — older (usually paid tier only)" },
+  { id: "gemini-1.5-flash",       label: "gemini-1.5-flash — legacy (usually paid tier only)" },
+  { id: "gemini-1.5-pro",         label: "gemini-1.5-pro — legacy (usually paid tier only)" },
+
+  // Gemma (availability varies by region/project — usually paid tier)
+  { id: "gemma-3-27b-it",         label: "gemma-3-27b-it — Gemma 3 27B (availability varies)" },
+  { id: "gemma-3-12b-it",         label: "gemma-3-12b-it — Gemma 3 12B (availability varies)" },
+  { id: "gemma-3-4b-it",          label: "gemma-3-4b-it — Gemma 3 4B (availability varies)" },
+  { id: "gemma-2-27b-it",         label: "gemma-2-27b-it — Gemma 2 27B (availability varies)" }
 ];
 
 export function getSettings() {
