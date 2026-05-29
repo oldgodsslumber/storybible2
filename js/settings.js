@@ -33,6 +33,17 @@ export function openSettingsModal() {
           <legend>Gemini</legend>
           <label>API Key <input id="geminiApiKey" type="password" value="${attr(s.geminiApiKey)}" placeholder="AIza..." /></label>
           <label>Model <input id="geminiModel" type="text" value="${attr(s.geminiModel)}" /></label>
+          <div class="provider-help">
+            <strong>How to get a free Gemini API key</strong>
+            <ol>
+              <li>Open <a href="https://aistudio.google.com/app/api-keys" target="_blank" rel="noopener noreferrer">Google AI Studio → API keys</a> in a new tab.</li>
+              <li>Sign in with your Google account if prompted.</li>
+              <li>Click <strong>Create API key</strong> and (if asked) pick a Google Cloud project — the default one is fine.</li>
+              <li>Copy the key (it starts with <code>AIza</code>) and paste it into the <strong>API Key</strong> field above.</li>
+              <li>Leave the model as <code>gemini-2.0-flash</code> unless you have a reason to change it — flash is fast, free, and works well for this app.</li>
+            </ol>
+            <p class="muted small">The free tier gives you generous daily limits. The key stays in this browser's localStorage and is sent only to Google's API — never to any server we control.</p>
+          </div>
         </fieldset>
 
         <fieldset id="oobaFields" class="provider-fields">
