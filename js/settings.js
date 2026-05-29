@@ -33,10 +33,11 @@ export function openSettingsModal() {
           <legend>Gemini</legend>
           <label>API Key <input id="geminiApiKey" type="password" value="${attr(s.geminiApiKey)}" placeholder="AIza..." /></label>
           <label>Model
-            <select id="geminiModel">
-              ${GEMINI_MODELS.map(m => `<option value="${attr(m.id)}"${s.geminiModel === m.id ? " selected" : ""}>${esc(m.label)}</option>`).join("")}
-              ${GEMINI_MODELS.find(m => m.id === s.geminiModel) ? "" : `<option value="${attr(s.geminiModel)}" selected>${esc(s.geminiModel)} (custom)</option>`}
-            </select>
+            <input id="geminiModel" type="text" list="geminiModelOptions" value="${attr(s.geminiModel)}" placeholder="gemini-2.5-flash or gemma-3-27b-it…" />
+            <datalist id="geminiModelOptions">
+              ${GEMINI_MODELS.map(m => `<option value="${attr(m.id)}">${esc(m.label)}</option>`).join("")}
+            </datalist>
+            <p class="muted small" style="margin-top:4px;">Start typing for suggestions. Any model ID Google lists in AI Studio will work — just paste it here verbatim. Whatever you put here is sent as-is to the v1beta endpoint and shown in the console log when the call fires.</p>
           </label>
           <div class="provider-help">
             <strong>How to get a free Gemini API key</strong>

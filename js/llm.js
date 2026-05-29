@@ -14,14 +14,25 @@ const DEFAULTS = {
   temperature: 0.3
 };
 
-// Known Gemini models we offer in the dropdown. Sent verbatim to the
-// :generateContent endpoint as-is. Update as Google announces new ones.
+// Suggested models for the autocomplete picker. The Model field is a
+// free-text input with a datalist, so users can also paste any model ID
+// Google offers that's not in this list. IDs are sent verbatim to the
+// :generateContent endpoint.
 export const GEMINI_MODELS = [
-  { id: "gemini-2.5-flash",        label: "gemini-2.5-flash (recommended — fast, free tier eligible)" },
-  { id: "gemini-2.5-pro",          label: "gemini-2.5-pro (smarter, slower, lower free quota)" },
-  { id: "gemini-2.0-flash",        label: "gemini-2.0-flash (older but still supported)" },
-  { id: "gemini-1.5-flash",        label: "gemini-1.5-flash (legacy)" },
-  { id: "gemini-1.5-pro",          label: "gemini-1.5-pro (legacy)" }
+  // Gemini (proprietary, multimodal)
+  { id: "gemini-2.5-flash",       label: "gemini-2.5-flash — recommended, fast, free tier" },
+  { id: "gemini-2.5-pro",         label: "gemini-2.5-pro — smarter, slower, lower free quota" },
+  { id: "gemini-2.5-flash-lite",  label: "gemini-2.5-flash-lite — cheaper / higher quota" },
+  { id: "gemini-2.0-flash",       label: "gemini-2.0-flash — older but supported" },
+  { id: "gemini-1.5-flash",       label: "gemini-1.5-flash — legacy" },
+  { id: "gemini-1.5-pro",         label: "gemini-1.5-pro — legacy" },
+
+  // Gemma (open weights, often higher free-tier limits than Gemini)
+  { id: "gemma-3-27b-it",         label: "gemma-3-27b-it — Gemma 3 27B, open weights, often higher quota" },
+  { id: "gemma-3-12b-it",         label: "gemma-3-12b-it — Gemma 3 12B" },
+  { id: "gemma-3-4b-it",          label: "gemma-3-4b-it — Gemma 3 4B" },
+  { id: "gemma-3-1b-it",          label: "gemma-3-1b-it — Gemma 3 1B, tiny / fast" },
+  { id: "gemma-2-27b-it",         label: "gemma-2-27b-it — Gemma 2 27B" }
 ];
 
 export function getSettings() {
