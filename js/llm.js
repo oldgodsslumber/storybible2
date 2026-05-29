@@ -8,7 +8,7 @@ const SETTINGS_KEY = "storybible.llm.settings.v1";
 const DEFAULTS = {
   provider: "none",
   geminiApiKey: "",
-  geminiModel: "gemini-2.5-flash",
+  geminiModel: "gemini-2.5-flash-lite",
   oobaBaseUrl: "http://127.0.0.1:5000",
   oobaModel: "local-model",
   temperature: 0.3
@@ -26,9 +26,9 @@ const DEFAULTS = {
 // Settings to see what's actually available.
 export const GEMINI_MODELS = [
   // Gemini 2.5 (typically free tier for new keys)
-  { id: "gemini-2.5-flash",       label: "gemini-2.5-flash — recommended, free tier, fast" },
-  { id: "gemini-2.5-pro",         label: "gemini-2.5-pro — free tier, smarter / lower quota" },
-  { id: "gemini-2.5-flash-lite",  label: "gemini-2.5-flash-lite — free tier, cheaper" },
+  { id: "gemini-2.5-flash-lite",  label: "gemini-2.5-flash-lite — recommended (default), highest free quota" },
+  { id: "gemini-2.5-flash",       label: "gemini-2.5-flash — smarter than lite, lower quota" },
+  { id: "gemini-2.5-pro",         label: "gemini-2.5-pro — smartest, lowest free quota" },
 
   // Older / paid-tier only (kept for users who specifically have access)
   { id: "gemini-2.0-flash",       label: "gemini-2.0-flash — older (usually paid tier only)" },
