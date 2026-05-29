@@ -72,6 +72,56 @@ function anySignal(signals) {
   return ctl.signal;
 }
 
+function buildGeminiErrorMessage(status, errText, model) {
+  let parsed = null;
+  try { parsed = JSON.parse(errText); } catch {}
+  const msg = parsed?.error?.message || "";
+  const statusName = parsed?.error?.status || "";
+
+  // Free tier 429 with explicit limit:0 → key is not eligible for free tier
+  // (typically because the underlying Google Cloud project has billing
+  // enabled, or the key wasn't created through AI Studio).
+  if (status === 429 && /limit:\s*0/i.test(msg) && /free_tier/i.test(msg)) {
+    return [
+      `Gemini ${status} — your API key has zero free-tier quota (not a temporary rate limit).`,
+      "",
+      "Most common cause: the key was created from a Google Cloud project that has billing enabled, or wasn't created through AI Studio.",
+      "Fix:",
+      "  1. Open https://aistudio.google.com/app/api-keys",
+      "  2. DELETE the key you're currently using",
+      "  3. Click 'Create API key' and let AI Studio pick the project (it'll use one without billing — required for free tier)",
+      "  4. Paste the new key into Settings here",
+      "",
+      "If you specifically want to use a billed project: enable billing on the project in Google Cloud Console and quota will increase to paid limits.",
+      `Model: ${model}`
+    ].join("\n");
+  }
+
+  // Normal rate limit (transient)
+  if (status === 429) {
+    const retryMatch = msg.match(/retry in (\d+)/i);
+    const retry = retryMatch ? ` Retry in ~${retryMatch[1]}s.` : "";
+    return `Gemini ${status} — rate limited.${retry}\n\nIf this keeps happening on the very first request, the project may have a 0 quota — see the Gemini help text in Settings.`;
+  }
+
+  // Auth / key errors
+  if (status === 400 && /API key not valid/i.test(msg)) {
+    return `Gemini ${status} — API key not valid. Re-paste from https://aistudio.google.com/app/api-keys (the key starts with AIza...).`;
+  }
+  if (status === 403) {
+    return `Gemini ${status} — forbidden. The API key may not have permission for this model (${model}). Try a different key or model.`;
+  }
+
+  // Model not found
+  if (status === 404 && /not found/i.test(msg)) {
+    return `Gemini ${status} — model "${model}" not found. Try changing the Model field in Settings to "gemini-2.0-flash" or "gemini-2.5-flash".`;
+  }
+
+  // Fallback: surface the parsed message if we got one, else raw text
+  if (msg) return `Gemini ${status} ${statusName ? "(" + statusName + ")" : ""}: ${msg}`;
+  return `Gemini ${status}: ${errText.slice(0, 400)}`;
+}
+
 async function callGemini(s, { system, user, expectJson, temperature, signal }) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(s.geminiModel)}:generateContent?key=${encodeURIComponent(s.geminiApiKey)}`;
   const body = {
