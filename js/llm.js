@@ -8,11 +8,21 @@ const SETTINGS_KEY = "storybible.llm.settings.v1";
 const DEFAULTS = {
   provider: "none",
   geminiApiKey: "",
-  geminiModel: "gemini-2.0-flash",
+  geminiModel: "gemini-2.5-flash",
   oobaBaseUrl: "http://127.0.0.1:5000",
   oobaModel: "local-model",
   temperature: 0.3
 };
+
+// Known Gemini models we offer in the dropdown. Sent verbatim to the
+// :generateContent endpoint as-is. Update as Google announces new ones.
+export const GEMINI_MODELS = [
+  { id: "gemini-2.5-flash",        label: "gemini-2.5-flash (recommended — fast, free tier eligible)" },
+  { id: "gemini-2.5-pro",          label: "gemini-2.5-pro (smarter, slower, lower free quota)" },
+  { id: "gemini-2.0-flash",        label: "gemini-2.0-flash (older but still supported)" },
+  { id: "gemini-1.5-flash",        label: "gemini-1.5-flash (legacy)" },
+  { id: "gemini-1.5-pro",          label: "gemini-1.5-pro (legacy)" }
+];
 
 export function getSettings() {
   try {
@@ -131,7 +141,7 @@ async function callGemini(s, { system, user, expectJson, temperature, signal }) 
   if (system) body.systemInstruction = { parts: [{ text: system }] };
   if (expectJson) body.generationConfig.responseMimeType = "application/json";
 
-  console.log("[llm] Gemini POST", { model: s.geminiModel, expectJson });
+  console.log("[llm] Gemini POST", { model: s.geminiModel, url, expectJson });
   const resp = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

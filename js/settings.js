@@ -1,5 +1,5 @@
 // Settings modal — open from any page. Persists LLM config to localStorage.
-import { getSettings, saveSettings, callLLM, isConfigured } from "./llm.js";
+import { getSettings, saveSettings, callLLM, isConfigured, GEMINI_MODELS } from "./llm.js";
 
 const NOTICE_KEY = "storybible.llm.notice.acknowledged";
 const FIRST_VISIT_PROMPT_KEY = "storybible.llm.config-prompt.shown";
@@ -32,7 +32,12 @@ export function openSettingsModal() {
         <fieldset id="geminiFields" class="provider-fields">
           <legend>Gemini</legend>
           <label>API Key <input id="geminiApiKey" type="password" value="${attr(s.geminiApiKey)}" placeholder="AIza..." /></label>
-          <label>Model <input id="geminiModel" type="text" value="${attr(s.geminiModel)}" /></label>
+          <label>Model
+            <select id="geminiModel">
+              ${GEMINI_MODELS.map(m => `<option value="${attr(m.id)}"${s.geminiModel === m.id ? " selected" : ""}>${esc(m.label)}</option>`).join("")}
+              ${GEMINI_MODELS.find(m => m.id === s.geminiModel) ? "" : `<option value="${attr(s.geminiModel)}" selected>${esc(s.geminiModel)} (custom)</option>`}
+            </select>
+          </label>
           <div class="provider-help">
             <strong>How to get a free Gemini API key</strong>
             <ol>
