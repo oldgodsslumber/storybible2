@@ -5,6 +5,15 @@ const NOTICE_KEY = "storybible.llm.notice.acknowledged";
 const FIRST_VISIT_PROMPT_KEY = "storybible.llm.config-prompt.shown";
 const SETTINGS_SAVED_EVENT = "storybible:llm-settings-saved";
 
+// HTML escape helpers — defined here at module top so they're unambiguously
+// in scope for every function below regardless of declaration order.
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+function attr(s) { return esc(s); }
+
 export function openSettingsModal() {
   const s = getSettings();
   const overlay = document.createElement("div");
