@@ -69,23 +69,55 @@ export function isConfigured() {
 
 const DEFAULT_TIMEOUT_MS = 120000; // 2 minutes — long enough for slow models, short enough to not freeze the UI forever
 
+// Retry transient errors (5xx server errors, transient rate-limit hints).
+// Returns true if we should retry, false to surface the error to the user.
+function isTransientError(err) {
+  const msg = err?.message || String(err);
+  // 5xx server errors from either Gemini or Ooba paths
+  if (/\b5\d\d\b/.test(msg) && /(temporarily unavailable|UNAVAILABLE|INTERNAL|server|overloaded)/i.test(msg)) return true;
+  if (/Gemini 5\d\d/.test(msg)) return true;
+  if (/Ooba error 5\d\d/.test(msg)) return true;
+  return false;
+}
+
+const MAX_RETRIES = 2;
+const RETRY_DELAYS_MS = [1500, 4000]; // backoff between retries
+
 export async function callLLM({ system, user, expectJson = false, temperature, signal, timeoutMs }) {
   const s = getSettings();
   if (s.provider === "none") {
     throw new Error("No LLM provider configured. Open Settings.");
   }
   const temp = temperature ?? s.temperature ?? 0.3;
-  // Combine caller signal with timeout signal
-  const timeoutCtl = new AbortController();
-  const timer = setTimeout(() => timeoutCtl.abort(new DOMException(`LLM call exceeded ${timeoutMs ?? DEFAULT_TIMEOUT_MS}ms timeout`, "TimeoutError")), timeoutMs ?? DEFAULT_TIMEOUT_MS);
-  const combinedSignal = anySignal([signal, timeoutCtl.signal]);
-  try {
-    if (s.provider === "gemini") return await callGemini(s, { system, user, expectJson, temperature: temp, signal: combinedSignal });
-    if (s.provider === "ooba")   return await callOoba(s,   { system, user, expectJson, temperature: temp, signal: combinedSignal });
-    throw new Error(`Unknown provider: ${s.provider}`);
-  } finally {
-    clearTimeout(timer);
+
+  let lastErr = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const delay = RETRY_DELAYS_MS[attempt - 1] || 4000;
+      console.log(`[llm] transient error, retry ${attempt}/${MAX_RETRIES} after ${delay}ms`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+    // Each attempt gets its own timeout so a slow first attempt doesn't eat the budget for retries
+    const timeoutCtl = new AbortController();
+    const timer = setTimeout(() => timeoutCtl.abort(new DOMException(`LLM call exceeded ${timeoutMs ?? DEFAULT_TIMEOUT_MS}ms timeout`, "TimeoutError")), timeoutMs ?? DEFAULT_TIMEOUT_MS);
+    const combinedSignal = anySignal([signal, timeoutCtl.signal]);
+    try {
+      if (s.provider === "gemini") return await callGemini(s, { system, user, expectJson, temperature: temp, signal: combinedSignal });
+      if (s.provider === "ooba")   return await callOoba(s,   { system, user, expectJson, temperature: temp, signal: combinedSignal });
+      throw new Error(`Unknown provider: ${s.provider}`);
+    } catch (err) {
+      lastErr = err;
+      // Don't retry if the caller aborted or our timeout fired
+      if (err?.name === "AbortError" || err?.name === "TimeoutError") throw err;
+      // Don't retry permanent errors
+      if (!isTransientError(err)) throw err;
+      // else: loop continues, will retry after backoff
+    } finally {
+      clearTimeout(timer);
+    }
   }
+  // Exhausted retries — surface the last error with a hint
+  throw new Error(`${lastErr?.message || String(lastErr)}\n\n(Already retried ${MAX_RETRIES} times. The provider's API is having sustained problems — try again in a minute or two.)`);
 }
 
 function anySignal(signals) {
@@ -142,7 +174,13 @@ function buildGeminiErrorMessage(status, errText, model) {
 
   // Model not found
   if (status === 404 && /not found/i.test(msg)) {
-    return `Gemini ${status} — model "${model}" not found. Try changing the Model field in Settings to "gemini-2.0-flash" or "gemini-2.5-flash".`;
+    return `Gemini ${status} — model "${model}" not found. Try changing the Model field in Settings to "gemini-2.5-flash-lite" or "gemini-2.5-flash".`;
+  }
+
+  // Transient server errors (Google's end). These usually clear within
+  // seconds — surface as "try again" rather than implying user fault.
+  if (status >= 500 && status < 600) {
+    return `Gemini ${status} — Google's API is temporarily unavailable. This is on their end, not yours. Wait a few seconds and try again.${msg ? "\n\nGoogle's message: " + msg.slice(0, 200) : ""}`;
   }
 
   // Fallback: surface the parsed message if we got one, else raw text
