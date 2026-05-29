@@ -13,11 +13,13 @@ function context() { return buildProjectContext(STATE_REF?.project); }
 
 const EXTRACTION_SYSTEM = `You are an assistant for a story bible app. Your job is to read raw creative writing notes and identify story entities AND project-level metadata.
 
-CRITICAL DISTINCTION:
+COVERAGE — be THOROUGH. Capture EVERY entity the writer mentions, however briefly. If they name eight characters, return eight character entries. If they describe five scenes or beats, return five. If they mention three locations, return three. Don't filter to just the "important" ones — the writer can uncheck items they don't want during approval. Under-extracting silently drops their work; over-extracting is correctable in one click.
+
+CRITICAL DISTINCTION (this is about inference, NOT about coverage):
 - EXTRACTION: a fact stated directly in the text. ("Jack climbs towers" → Jack is a character; he climbs towers.)
 - INFERENCE: something you deduced but the writer did not say. ("Jack is probably reckless" → inference.)
 
-Be conservative. Prefer extraction over inference. When in doubt, mark as inference. Do not invent details.
+The conservative rule applies only to inference vs. extraction: extract everything stated, but only INFER beyond that when it clearly serves the writer (e.g., a strong implication, a logical consequence). Do not invent details.
 
 You will also propose values for Story Settings — project-level metadata:
 - genre: short phrase describing the genre / setting ("modern science fiction", "noir thriller", "high fantasy", etc.)
@@ -61,6 +63,8 @@ Your job: identify
 3. New CONNECTIONS between entities
 4. STORY SETTINGS proposals — if the note clarifies the project's genre, premise, or introduces a new anchor concept (proper-noun term that should always be referred to by that exact name), propose them.
 
+COVERAGE — be THOROUGH. Capture EVERY entity, update, and connection the writer mentions, however briefly. If the note describes five scenes, return five new scenes. If it names six new characters, return six. Don't filter to the "main" ones — the writer can uncheck items they don't want during approval. Under-extracting silently drops their work.
+
 A SCENE is the smallest unit — one continuous moment in one location. ("Jack confronts Sara on the rooftop" → scene.)
 A BEAT is a structural moment between a single scene and an ongoing subplot — "the inciting incident", "the midpoint", "the climax", "Act 2 turn". If the writer describes a major plot pivot that organizes several scenes (rather than a single moment-to-moment scene), propose it as a beat with a structurePosition tag.
 
@@ -88,13 +92,15 @@ Return ONLY this JSON shape:
 - columnHint must be one of the column IDs listed in PROJECT CONTEXT. If you can't tell which column fits, use the default main column shown there.
 - No prose outside the JSON.`;
 
-const GAP_ANALYSIS_SYSTEM = `You are an assistant for a story bible app. The writer has provided an idea dump and the system has extracted some entities. Your job is to ask the writer 3–7 short, specific questions that fill the most important narrative gaps.
+const GAP_ANALYSIS_SYSTEM = `You are an assistant for a story bible app. The writer has provided a note and the system has extracted some entities. Your job is to ask the writer 5–12 short, specific questions that fill the most important narrative gaps and help disambiguate anything ambiguous in the extraction.
 
 Rules:
 - Tailor every question to the actual story content. NO generic questions like "what is your story about?" — that's already been answered.
 - One question at a time, in the order you return.
 - For theme/pillar questions, offer 4–6 short option chips the writer can pick from.
 - Mark each question with its target field so the answer can be applied.
+- It is much better to ask more questions than fewer. The writer can skip any they don't want to answer. Use the upper end of the range when the extraction left meaningful gaps.
+- Good question types include: ambiguous role / type ("Is X a person or an organization?"), missing motivation, unstated relationships, structural placement ("Does the confrontation happen before or after the midpoint?"), unclear stakes, and underdefined locations.
 
 Return ONLY this JSON shape:
 {

@@ -304,7 +304,7 @@ async function parseNoteHandler() {
   console.log("[parse-note] button clicked");
   const text = els.notePanel.value.trim();
   if (!text) {
-    alert("Type something into the note panel first, then click Parse with LLM.");
+    alert("Type something into the note panel first, then click Process.");
     return;
   }
   if (!isConfigured()) {
@@ -330,7 +330,30 @@ async function parseNoteHandler() {
       } catch (err) {
         console.error("[parse-note] applyApprovedItems failed", err);
         alert("Saving approved items failed: " + (err.message || err));
+        return;
       }
+      // After approval, run gap analysis on the same note so the LLM can
+      // ask clarifying questions and surface what the extraction missed.
+      const { ok: gapOk, result: gap } = await runLLMAction(
+        "Looking for follow-up questions",
+        () => runGapAnalysis(text, parsed)
+      );
+      if (!gapOk) return;
+      const questions = gap?.questions || [];
+      if (questions.length === 0) {
+        console.log("[parse-note] no follow-up questions returned");
+        return;
+      }
+      openWizardModal(questions, {
+        onComplete: async ({ answers }) => {
+          try {
+            await applyWizardAnswers(answers);
+          } catch (err) {
+            console.error("[parse-note] applyWizardAnswers failed", err);
+            alert("Saving wizard answers failed: " + (err.message || err));
+          }
+        }
+      });
     }
   });
 }

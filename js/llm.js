@@ -76,7 +76,7 @@ async function callGemini(s, { system, user, expectJson, temperature, signal }) 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(s.geminiModel)}:generateContent?key=${encodeURIComponent(s.geminiApiKey)}`;
   const body = {
     contents: [{ role: "user", parts: [{ text: user }] }],
-    generationConfig: { temperature }
+    generationConfig: { temperature, maxOutputTokens: 8192 }
   };
   if (system) body.systemInstruction = { parts: [{ text: system }] };
   if (expectJson) body.generationConfig.responseMimeType = "application/json";
@@ -113,7 +113,10 @@ async function callOoba(s, { system, user, expectJson, temperature, signal }) {
     model: s.oobaModel || "local-model",
     messages,
     temperature,
-    max_tokens: 2048
+    // Bumped from 2048 — rich JSON extractions with multiple characters,
+    // scenes, beats, and connections were getting truncated mid-array,
+    // leading to parse errors and few cards reaching the approval modal.
+    max_tokens: 4096
   };
   // Note: we used to send response_format:{type:"json_object"} when expectJson
   // was true, but ooba's OpenAI extension doesn't reliably honor it — some
