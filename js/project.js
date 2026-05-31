@@ -53,6 +53,16 @@ const els = {
   refreshBadge: document.getElementById("refreshBadge"),
   recenterBtn: document.getElementById("recenterBtn"),
   storySettingsBtn: document.getElementById("storySettingsBtn"),
+  captureView: document.getElementById("captureView"),
+  captureNotePanel: document.getElementById("captureNotePanel"),
+  captureProcessBtn: document.getElementById("captureProcessBtn"),
+  captureClearBtn: document.getElementById("captureClearBtn"),
+  captureRerunExtractBtn: document.getElementById("captureRerunExtractBtn"),
+  mobileTabs: document.querySelectorAll(".mobile-tab"),
+  mobileMoreBtn: document.getElementById("mobileMoreBtn"),
+  mobileMoreSheet: document.getElementById("mobileMoreSheet"),
+  mobileMoreClose: document.getElementById("mobileMoreClose"),
+  mobileMoreList: document.querySelector(".mobile-more-list"),
   tabs: document.querySelectorAll(".tab"),
   cardTypeButtons: document.querySelectorAll(".card-type-buttons button"),
 };
@@ -92,6 +102,76 @@ els.tabs.forEach(t => t.addEventListener("click", () => switchView(t.dataset.vie
 els.cardTypeButtons.forEach(b => b.addEventListener("click", () => createCard(b.dataset.type)));
 els.parseNoteBtn?.addEventListener("click", parseNoteHandler);
 els.clearNoteBtn?.addEventListener("click", () => { els.notePanel.value = ""; });
+
+// Capture view (mobile-primary) — same handler as the desktop side panel,
+// just reading from the bigger textarea.
+els.captureProcessBtn?.addEventListener("click", () => {
+  if (!els.notePanel || !els.captureNotePanel) return;
+  els.notePanel.value = els.captureNotePanel.value;
+  parseNoteHandler().finally(() => {
+    // parseNoteHandler clears els.notePanel after approval; mirror back.
+    if (els.notePanel.value === "") els.captureNotePanel.value = "";
+  });
+});
+els.captureClearBtn?.addEventListener("click", () => { if (els.captureNotePanel) els.captureNotePanel.value = ""; });
+els.captureRerunExtractBtn?.addEventListener("click", () => runIdeaDumpExtractionNow());
+
+// Mobile bottom tab bar — top-level views: capture, outline, review.
+els.mobileTabs?.forEach(btn => {
+  const target = btn.dataset.mobileTab;
+  if (!target) return; // "More" handled separately
+  btn.addEventListener("click", () => {
+    switchView(target);
+    setMobileTabActive(target);
+  });
+});
+
+// Mobile More sheet
+els.mobileMoreBtn?.addEventListener("click", () => openMobileMoreSheet());
+els.mobileMoreClose?.addEventListener("click", () => closeMobileMoreSheet());
+els.mobileMoreSheet?.querySelector(".mobile-more-backdrop")?.addEventListener("click", closeMobileMoreSheet);
+els.mobileMoreList?.querySelectorAll("button[data-mobile-action]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const action = btn.dataset.mobileAction;
+    closeMobileMoreSheet();
+    switch (action) {
+      case "story-settings":
+        openStorySettingsModal(state, projectId, { onSaved: () => {} });
+        break;
+      case "refresh":
+        handleRefresh();
+        break;
+      case "settings":
+        openSettingsModal();
+        break;
+      case "back-dashboard":
+        window.location.href = "./index.html";
+        break;
+      case "kanban":
+      case "oracle":
+      case "archive":
+        switchView(action);
+        setMobileTabActive(null);
+        break;
+    }
+  });
+});
+
+function openMobileMoreSheet() {
+  if (!els.mobileMoreSheet) return;
+  els.mobileMoreSheet.classList.remove("hidden");
+}
+function closeMobileMoreSheet() {
+  if (!els.mobileMoreSheet) return;
+  els.mobileMoreSheet.classList.add("hidden");
+}
+function setMobileTabActive(target) {
+  els.mobileTabs?.forEach(b => b.classList.toggle("active", b.dataset.mobileTab === target));
+}
+
+function isMobileViewport() {
+  return window.matchMedia && window.matchMedia("(max-width: 768px)").matches;
+}
 els.refreshBtn?.addEventListener("click", handleRefresh);
 els.rerunExtractBtn?.addEventListener("click", () => runIdeaDumpExtractionNow());
 els.recenterBtn?.addEventListener("click", () => {
@@ -207,7 +287,9 @@ async function loadProject() {
   await migrateUnassignedColumns();
 
   hide(els.loading);
-  switchView("graph");
+  // On mobile, default to Capture; canvas is desktop-only.
+  switchView(isMobileViewport() ? "capture" : "graph");
+  setMobileTabActive(isMobileViewport() ? "capture" : null);
   updateRefreshNudge();
   if (els.rerunExtractBtn) {
     els.rerunExtractBtn.classList.remove("hidden");
@@ -215,6 +297,10 @@ async function loadProject() {
     if (!hasText) {
       els.rerunExtractBtn.title = "This project has no idea-dump text.";
     }
+  }
+  if (els.captureRerunExtractBtn) {
+    const hasText = !!(state.project.themeText || "").trim();
+    els.captureRerunExtractBtn.classList.toggle("hidden", !hasText);
   }
   console.log("[project] loaded", {
     cards: state.cards.size,
@@ -721,6 +807,7 @@ function switchView(name) {
   hide(els.archiveView);
   hide(els.kanbanView);
   hide(els.oracleView);
+  hide(els.captureView);
   hideCardEditor();
 
   // Strip outline-only chrome (beat spine, prologue/epilogue sections) when
@@ -731,9 +818,13 @@ function switchView(name) {
     document.getElementById("epilogueSection")?.remove();
   }
 
-  if (name === "graph") {
+  if (name === "capture") {
+    show(els.captureView);
+    setMobileTabActive("capture");
+  } else if (name === "graph") {
     show(els.graphView);
     initOrRefreshGraph();
+    setMobileTabActive(null);
   } else if (name === "outline") {
     show(els.outlineView);
     renderOutline();

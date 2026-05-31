@@ -131,6 +131,157 @@ body { display: flex; flex-direction: column; height: 100vh; }
 .outline-item h4 { margin: 0 0 4px 0; }
 .outline-item p { margin: 0; }
 
+/* ---------- Mobile (Phase 1 + 2): Capture view, bottom tab bar ---------- */
+
+.mobile-tabbar { display: none; }
+.mobile-more-sheet { display: none; }
+#captureView { padding: 0; }
+
+@media (max-width: 768px) {
+  /* Hide desktop top nav, refresh badge, story button on mobile — these
+     all live in the bottom tabbar / More sheet now. */
+  .view-tabs { display: none; }
+  .topbar-actions { display: none; }
+  .topbar {
+    padding: 10px 14px;
+  }
+  .brand { font-size: 14px; }
+  .user-area .user-email { display: none; }
+
+  /* Bottom tab bar */
+  .mobile-tabbar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--bg-elev);
+    border-top: 1px solid var(--border);
+    padding-bottom: env(safe-area-inset-bottom);
+    z-index: 40;
+  }
+  .mobile-tab {
+    background: transparent;
+    border: none;
+    padding: 8px 4px;
+    color: var(--muted);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    min-height: 56px;
+    font-size: 11px;
+    border-radius: 0;
+  }
+  .mobile-tab:hover { background: transparent; }
+  .mobile-tab.active { color: var(--accent); }
+  .mobile-tab-icon { font-size: 18px; line-height: 1; }
+  .mobile-tab-label { font-size: 11px; }
+
+  /* Reserve space at the bottom of every view for the tabbar so content
+     isn't hidden behind it. */
+  #main { padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
+
+  /* More sheet */
+  .mobile-more-sheet { display: block; }
+  .mobile-more-sheet.hidden { display: none; }
+  .mobile-more-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 60;
+  }
+  .mobile-more-panel {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--bg-elev);
+    border-top: 1px solid var(--border);
+    border-radius: 12px 12px 0 0;
+    padding: 14px 14px max(14px, env(safe-area-inset-bottom));
+    z-index: 70;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  .mobile-more-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .mobile-more-head h3 { margin: 0; font-size: 16px; }
+  .mobile-more-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .mobile-more-list button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-size: 15px;
+  }
+  .mobile-more-note { margin-top: 10px; }
+
+  /* Hide canvas-only chrome on mobile */
+  .canvas-recenter-btn { display: none; }
+
+  /* Capture view full-screen layout */
+  .capture-wrap {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 100%;
+  }
+  .capture-title { margin: 0; font-size: 18px; }
+  .capture-hint { margin: 0; }
+  .capture-textarea {
+    flex: 1;
+    min-height: 240px;
+    font-size: 16px;
+    line-height: 1.5;
+    resize: none;
+  }
+  .capture-actions {
+    display: flex;
+    gap: 10px;
+  }
+  .capture-actions button { flex: 1; }
+  .capture-secondary {
+    display: flex;
+    justify-content: center;
+  }
+
+  /* Card editor on mobile — full-screen sheet that slides over */
+  .card-editor {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+    border: none;
+    padding-bottom: calc(60px + env(safe-area-inset-bottom));
+  }
+}
+
+/* Capture view on desktop is reachable via More-style navigation but the
+   primary entry point is the side panel; give it sensible padding. */
+@media (min-width: 769px) {
+  #captureView { padding: 24px; }
+  .capture-wrap { max-width: 720px; margin: 0 auto; }
+  .capture-textarea { min-height: 360px; font-size: 15px; line-height: 1.55; }
+  .capture-actions { display: flex; gap: 10px; margin-top: 12px; }
+  .capture-secondary { margin-top: 8px; }
+}
+
 /* Outline board: Trello-style columns */
 #outlineView { overflow: auto; }
 .outline-board {

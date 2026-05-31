@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>The Writer's Assistant — Project</title>
   <link rel="stylesheet" href="./css/shared.css" />
   <link rel="stylesheet" href="./css/project.css" />
@@ -89,6 +90,22 @@
       <p class="muted">Pick a mode below to get a focused LLM analysis: character arc, story synopsis, arc summaries with tension flagging, or theme coherence.</p>
     </section>
 
+    <!-- CAPTURE VIEW (mobile primary) -->
+    <section id="captureView" class="view hidden">
+      <div class="capture-wrap">
+        <h2 class="capture-title">Capture</h2>
+        <p class="muted small capture-hint">Type, paste, or use your phone's voice input (microphone on your keyboard). When you tap Process, the LLM extracts characters, scenes, beats, and themes — you'll review and approve each one.</p>
+        <textarea id="captureNotePanel" class="capture-textarea" placeholder="What just popped into your head?"></textarea>
+        <div class="capture-actions">
+          <button id="captureProcessBtn" class="primary">Process</button>
+          <button id="captureClearBtn" class="ghost">Clear</button>
+        </div>
+        <div class="capture-secondary">
+          <button id="captureRerunExtractBtn" class="ghost small hidden">Re-run idea-dump extraction</button>
+        </div>
+      </div>
+    </section>
+
     <!-- KANBAN VIEW -->
     <section id="kanbanView" class="view hidden">
       <div class="kanban-header">
@@ -116,6 +133,47 @@
         </main>
       </div>
     </section>
+
+    <!-- Mobile bottom tab bar (hidden on desktop via CSS) -->
+    <nav class="mobile-tabbar">
+      <button class="mobile-tab" data-mobile-tab="capture" title="Capture a note">
+        <span class="mobile-tab-icon">✎</span>
+        <span class="mobile-tab-label">Capture</span>
+      </button>
+      <button class="mobile-tab" data-mobile-tab="outline" title="Outline">
+        <span class="mobile-tab-icon">☷</span>
+        <span class="mobile-tab-label">Outline</span>
+      </button>
+      <button class="mobile-tab" data-mobile-tab="review" title="Review">
+        <span class="mobile-tab-icon">★</span>
+        <span class="mobile-tab-label">Review</span>
+      </button>
+      <button class="mobile-tab" id="mobileMoreBtn" title="More">
+        <span class="mobile-tab-icon">⋯</span>
+        <span class="mobile-tab-label">More</span>
+      </button>
+    </nav>
+
+    <!-- Mobile More sheet (hidden by default) -->
+    <div id="mobileMoreSheet" class="mobile-more-sheet hidden">
+      <div class="mobile-more-backdrop"></div>
+      <div class="mobile-more-panel">
+        <header class="mobile-more-head">
+          <h3>More</h3>
+          <button id="mobileMoreClose" class="ghost small">Close</button>
+        </header>
+        <ul class="mobile-more-list">
+          <li><button data-mobile-action="story-settings">📖 Story Settings</button></li>
+          <li><button data-mobile-action="refresh">↻ Global Refresh</button></li>
+          <li><button data-mobile-action="kanban">Kanban</button></li>
+          <li><button data-mobile-action="oracle">Oracle</button></li>
+          <li><button data-mobile-action="archive">Archive</button></li>
+          <li><button data-mobile-action="settings">⚙ LLM Settings</button></li>
+          <li><button data-mobile-action="back-dashboard">← All projects</button></li>
+        </ul>
+        <p class="muted small mobile-more-note">Canvas is desktop-only — use Capture to add cards via notes, or Outline to see your scenes.</p>
+      </div>
+    </div>
 
     <!-- Card editor (floating; usable from Canvas, Outline, anywhere) -->
     <div id="cardEditor" class="card-editor hidden"></div>
