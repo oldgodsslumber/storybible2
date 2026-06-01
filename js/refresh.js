@@ -11,7 +11,7 @@ import { db } from "./shared.js";
 import {
   doc, updateDoc, collection, getDocs, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { callLLM, parseJsonLoose, isConfigured } from "./llm.js";
+import { callLLM, parseJsonLoose, isConfigured, callLLMJson } from "./llm.js";
 import { changesSinceLastRefresh } from "./audit.js";
 import { buildProjectContext } from "./story-settings.js";
 
@@ -249,8 +249,10 @@ async function callBatched(system, payload) {
 async function runOne(system, payload) {
   const userText = `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON described in the system prompt.`;
   const projectCtx = buildProjectContext(STATE_REF?.project);
-  const raw = await callLLM({ system: projectCtx + system, user: userText, expectJson: true });
-  return parseJsonLoose(raw);
+  // callLLMJson handles the "broken JSON, retry once with a repair prompt"
+  // pattern so a single malformed reply in a multi-target refresh doesn't
+  // burn that target with no recovery.
+  return callLLMJson({ system: projectCtx + system, user: userText });
 }
 
 // ---------- Conflict resolution ----------

@@ -1,5 +1,5 @@
 // Settings modal — open from any page. Persists LLM config to localStorage.
-import { getSettings, saveSettings, callLLM, isConfigured, GEMINI_MODELS, listGeminiModels } from "./llm.js";
+import { getSettings, saveSettings, callLLM, isConfigured, GEMINI_MODELS, listGeminiModels, GEMINI_FALLBACK_CHAIN, getDailyUsage } from "./llm.js";
 
 const NOTICE_KEY = "storybible.llm.notice.acknowledged";
 const FIRST_VISIT_PROMPT_KEY = "storybible.llm.config-prompt.shown";
@@ -53,6 +53,25 @@ export function openSettingsModal() {
             <div id="modelListResults" class="model-list-results"></div>
             <p class="muted small" style="margin-top:4px;">The dropdown shows commonly-available models. Click "List models" above to see exactly which ones your API key has access to (Gemma availability varies by region/project). Whatever you put here is sent verbatim and shown in the console POST log.</p>
           </label>
+          <div class="provider-help" id="geminiChainStatus">
+            <strong>Today's free-tier usage (this device)</strong>
+            <ul class="chain-status-list">
+              ${(() => {
+                const u = getDailyUsage();
+                return GEMINI_FALLBACK_CHAIN.map(m => {
+                  const used = u.counts[m.id] || 0;
+                  const remaining = Math.max(0, m.dailyLimit - used);
+                  const exhausted = used >= m.dailyLimit;
+                  return `<li class="${exhausted ? "exhausted" : ""}">
+                    <code>${esc(m.id)}</code> — <strong>${used}/${m.dailyLimit}</strong> used today
+                    ${exhausted ? `<span class="muted small">(exhausted, auto-falls through)</span>` : `<span class="muted small">(${remaining} left)</span>`}
+                  </li>`;
+                }).join("");
+              })()}
+            </ul>
+            <p class="muted small">The app starts with the first model and automatically falls through to the next when one hits its daily limit. Counts reset at local midnight. Manual model picks outside this chain (e.g. gemini-2.5-pro) bypass the chain entirely.</p>
+          </div>
+
           <div class="provider-help">
             <strong>How to get a free Gemini API key</strong>
             <ol>

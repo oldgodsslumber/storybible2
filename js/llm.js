@@ -14,33 +14,102 @@ const DEFAULTS = {
   temperature: 0.3
 };
 
-// Suggested models for the autocomplete picker. The Model field is a
-// free-text input with a datalist, so users can also paste any model ID
-// Google offers that's not in this list. IDs are sent verbatim to the
-// :generateContent endpoint.
+// Fallback chain for free-tier Gemini API usage. The app starts at the top
+// of this list, and when a model hits its daily limit (tracked in
+// localStorage) or returns a quota-exhausted 429, it automatically falls
+// through to the next entry. End users don't need to know any of this.
 //
-// As of mid-2026 Google's free tier is largely restricted to the 2.5
-// family. Older Gemini models and most Gemma variants require paid tier
-// or special enablement and will return 404 / "not enabled in this tier"
-// for most new keys. Use the "List models my key can use" button in
-// Settings to see what's actually available.
-export const GEMINI_MODELS = [
-  // Gemini 2.5 (typically free tier for new keys)
-  { id: "gemini-2.5-flash-lite",  label: "gemini-2.5-flash-lite — recommended (default), highest free quota" },
-  { id: "gemini-2.5-flash",       label: "gemini-2.5-flash — smarter than lite, lower quota" },
-  { id: "gemini-2.5-pro",         label: "gemini-2.5-pro — smartest, lowest free quota" },
-
-  // Older / paid-tier only (kept for users who specifically have access)
-  { id: "gemini-2.0-flash",       label: "gemini-2.0-flash — older (usually paid tier only)" },
-  { id: "gemini-1.5-flash",       label: "gemini-1.5-flash — legacy (usually paid tier only)" },
-  { id: "gemini-1.5-pro",         label: "gemini-1.5-pro — legacy (usually paid tier only)" },
-
-  // Gemma (availability varies by region/project — usually paid tier)
-  { id: "gemma-3-27b-it",         label: "gemma-3-27b-it — Gemma 3 27B (availability varies)" },
-  { id: "gemma-3-12b-it",         label: "gemma-3-12b-it — Gemma 3 12B (availability varies)" },
-  { id: "gemma-3-4b-it",          label: "gemma-3-4b-it — Gemma 3 4B (availability varies)" },
-  { id: "gemma-2-27b-it",         label: "gemma-2-27b-it — Gemma 2 27B (availability varies)" }
+// Numbers are the user-stated daily limits as of mid-2026. Google adjusts
+// these often; if real-world numbers differ, edit `dailyLimit` here.
+//
+// Gemma 4 model IDs follow the Gemma 3 naming convention (e.g. gemma-3-27b-it).
+// If Google's actual IDs differ, the "List models my key can use" button
+// in Settings shows the authoritative list — paste the real ID into the
+// Model field and it'll be used as a manual override.
+export const GEMINI_FALLBACK_CHAIN = [
+  { id: "gemini-2.5-flash",       dailyLimit: 20,   label: "Gemini 2.5 Flash" },
+  { id: "gemini-2.5-flash-lite",  dailyLimit: 20,   label: "Gemini 2.5 Flash Lite" },
+  { id: "gemma-4-31b-it",         dailyLimit: 1500, label: "Gemma 4 31B" },
+  { id: "gemma-4-26b-it",         dailyLimit: 1500, label: "Gemma 4 26B" }
 ];
+
+// Suggested models for the autocomplete picker. The first four are the
+// fallback chain; the rest are useful options for users with paid tier or
+// older keys that have access to them.
+export const GEMINI_MODELS = [
+  ...GEMINI_FALLBACK_CHAIN.map((m, i) => ({
+    id: m.id,
+    label: `${m.id} — ${m.label} · ${m.dailyLimit}/day free${i === 0 ? " (default — chain auto-falls through)" : ""}`
+  })),
+  // Pro and legacy / Gemma 3 family — manual selection only
+  { id: "gemini-2.5-pro",         label: "gemini-2.5-pro — smartest, lowest free quota" },
+  { id: "gemini-2.0-flash",       label: "gemini-2.0-flash — older (usually paid tier only)" },
+  { id: "gemma-3-27b-it",         label: "gemma-3-27b-it — Gemma 3 27B (availability varies)" },
+  { id: "gemma-3-12b-it",         label: "gemma-3-12b-it — Gemma 3 12B (availability varies)" }
+];
+
+// --- Per-model daily usage tracking ---
+// Stored in localStorage as { date: "YYYY-MM-DD", counts: { modelId: n } }.
+// Date is local; resets at local midnight.
+
+const USAGE_KEY = "storybible.llm.usage.v1";
+
+function todayKey() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+export function getDailyUsage() {
+  try {
+    const raw = localStorage.getItem(USAGE_KEY);
+    if (!raw) return { date: todayKey(), counts: {} };
+    const parsed = JSON.parse(raw);
+    if (parsed.date !== todayKey()) return { date: todayKey(), counts: {} };
+    return parsed;
+  } catch {
+    return { date: todayKey(), counts: {} };
+  }
+}
+
+function setDailyUsage(usage) {
+  localStorage.setItem(USAGE_KEY, JSON.stringify(usage));
+}
+
+function bumpModelUsage(modelId) {
+  const usage = getDailyUsage();
+  usage.counts[modelId] = (usage.counts[modelId] || 0) + 1;
+  setDailyUsage(usage);
+}
+
+function markModelExhausted(modelId) {
+  const usage = getDailyUsage();
+  const chainEntry = GEMINI_FALLBACK_CHAIN.find(c => c.id === modelId);
+  // Bump to limit (or +1 if not in chain) so pickActiveModel skips it.
+  usage.counts[modelId] = chainEntry ? chainEntry.dailyLimit : (usage.counts[modelId] || 0) + 1;
+  setDailyUsage(usage);
+}
+
+// Picks the actual model to call, given the user's chosen starting model.
+// If the chosen model is in the fallback chain AND is exhausted for today,
+// returns the next non-exhausted model. If the chosen model is NOT in the
+// chain (user manually picked something like 2.5-pro), returns it as-is —
+// we don't second-guess explicit choices outside the chain.
+export function pickActiveGeminiModel(chosen) {
+  const usage = getDailyUsage();
+  const chainIndex = GEMINI_FALLBACK_CHAIN.findIndex(c => c.id === chosen);
+  if (chainIndex < 0) return chosen; // manual override outside the chain
+  for (let i = chainIndex; i < GEMINI_FALLBACK_CHAIN.length; i++) {
+    const entry = GEMINI_FALLBACK_CHAIN[i];
+    const used = usage.counts[entry.id] || 0;
+    if (used < entry.dailyLimit) return entry.id;
+  }
+  // Everything in the chain is exhausted — return the last one anyway so the
+  // user sees a real Google rate-limit error rather than nothing.
+  return GEMINI_FALLBACK_CHAIN[GEMINI_FALLBACK_CHAIN.length - 1].id;
+}
 
 export function getSettings() {
   try {
@@ -188,35 +257,84 @@ function buildGeminiErrorMessage(status, errText, model) {
   return `Gemini ${status}: ${errText.slice(0, 400)}`;
 }
 
-async function callGemini(s, { system, user, expectJson, temperature, signal }) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(s.geminiModel)}:generateContent?key=${encodeURIComponent(s.geminiApiKey)}`;
-  const body = {
-    contents: [{ role: "user", parts: [{ text: user }] }],
-    generationConfig: { temperature, maxOutputTokens: 8192 }
-  };
-  if (system) body.systemInstruction = { parts: [{ text: system }] };
-  if (expectJson) body.generationConfig.responseMimeType = "application/json";
+// Safety filter settings. The app is used to write novels, video games,
+// and feature films — content that the default Gemini filters routinely
+// block as "harmful" even when it's just normal dramatic writing. We
+// explicitly set every category to BLOCK_NONE.
+//
+// BLOCK_NONE may be rejected by some projects (typically those without
+// billing); if Google returns an error mentioning safetySettings, the
+// user can either enable billing or fall back to a Gemma model where
+// safety is not enforced the same way.
+const SAFETY_OFF = [
+  { category: "HARM_CATEGORY_HARASSMENT",        threshold: "BLOCK_NONE" },
+  { category: "HARM_CATEGORY_HATE_SPEECH",       threshold: "BLOCK_NONE" },
+  { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+  { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+  { category: "HARM_CATEGORY_CIVIC_INTEGRITY",   threshold: "BLOCK_NONE" }
+];
 
-  console.log("[llm] Gemini POST", { model: s.geminiModel, url, expectJson });
-  const resp = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal
-  });
-  if (!resp.ok) {
-    const errText = await resp.text();
-    throw new Error(buildGeminiErrorMessage(resp.status, errText, s.geminiModel));
+async function callGemini(s, { system, user, expectJson, temperature, signal }) {
+  // Pick the actual model: start from user-chosen, fall through the chain
+  // if the chosen one is exhausted for today.
+  let activeModel = pickActiveGeminiModel(s.geminiModel);
+  const usage = getDailyUsage();
+  if (activeModel !== s.geminiModel) {
+    console.log(`[llm] ${s.geminiModel} is exhausted (${usage.counts[s.geminiModel] || 0}/day used), falling through to ${activeModel}`);
   }
-  const json = await resp.json();
-  const text = json?.candidates?.[0]?.content?.parts?.map(p => p.text).join("") ?? "";
-  console.log("[llm] Gemini reply", { length: text.length, preview: text.slice(0, 200) });
-  if (!text) {
-    const finishReason = json?.candidates?.[0]?.finishReason;
-    const safety = json?.candidates?.[0]?.safetyRatings;
-    throw new Error(`Gemini returned no text. finishReason=${finishReason || "unknown"}${safety ? "; safetyRatings=" + JSON.stringify(safety) : ""}`);
+
+  const attemptCall = async (modelId) => {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(s.geminiApiKey)}`;
+    const body = {
+      contents: [{ role: "user", parts: [{ text: user }] }],
+      generationConfig: { temperature, maxOutputTokens: 8192 },
+      safetySettings: SAFETY_OFF
+    };
+    if (system) body.systemInstruction = { parts: [{ text: system }] };
+    if (expectJson) body.generationConfig.responseMimeType = "application/json";
+
+    const u = getDailyUsage();
+    console.log("[llm] Gemini POST", { model: modelId, used: u.counts[modelId] || 0, expectJson });
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal
+    });
+    if (!resp.ok) {
+      const errText = await resp.text();
+      const err = new Error(buildGeminiErrorMessage(resp.status, errText, modelId));
+      err.status = resp.status;
+      err.modelId = modelId;
+      throw err;
+    }
+    const json = await resp.json();
+    const text = json?.candidates?.[0]?.content?.parts?.map(p => p.text).join("") ?? "";
+    console.log("[llm] Gemini reply", { model: modelId, length: text.length, preview: text.slice(0, 200) });
+    if (!text) {
+      const finishReason = json?.candidates?.[0]?.finishReason;
+      const safety = json?.candidates?.[0]?.safetyRatings;
+      throw new Error(`Gemini returned no text. finishReason=${finishReason || "unknown"}${safety ? "; safetyRatings=" + JSON.stringify(safety) : ""}`);
+    }
+    bumpModelUsage(modelId);
+    return text;
+  };
+
+  try {
+    return await attemptCall(activeModel);
+  } catch (err) {
+    // If we hit a rate limit on this model, mark it exhausted and try the
+    // next one in the chain (if any). This handles the case where our
+    // local counter is behind Google's (e.g. user used the same key on
+    // another device or pre-existing quota usage today).
+    const isRateLimit = err?.status === 429;
+    if (!isRateLimit) throw err;
+    markModelExhausted(activeModel);
+    const fallback = pickActiveGeminiModel(activeModel);
+    if (fallback === activeModel) throw err; // no more chain to fall through
+    console.log(`[llm] ${activeModel} hit 429; auto-switching to ${fallback}`);
+    return await attemptCall(fallback);
   }
-  return text;
 }
 
 async function callOoba(s, { system, user, expectJson, temperature, signal }) {
@@ -307,6 +425,28 @@ export async function listGeminiModels(apiKey) {
   }));
   // Only show models that actually support generateContent (what we use)
   return models.filter(m => m.supports.includes("generateContent"));
+}
+
+// Shared "call → parse JSON, retry once with a repair pass if parsing fails".
+// Used by refresh.js and review.js so the JSON-string brittleness behaves the
+// same everywhere. Replaces ad-hoc callJson helpers that duplicated this
+// logic with subtle differences.
+export async function callLLMJson({ system, user, temperature, signal }) {
+  const raw = await callLLM({ system, user, expectJson: true, temperature, signal });
+  try {
+    return parseJsonLoose(raw);
+  } catch (firstErr) {
+    console.warn("[llm] JSON parse failed once, retrying with cleanup prompt:", firstErr.message);
+    const cleanupSystem = "You are a JSON repair assistant. The user will paste broken or wrapped JSON. Return ONLY the corrected JSON, no prose, no fences. Preserve all data; only fix syntax.";
+    const repaired = await callLLM({
+      system: cleanupSystem,
+      user: `Broken output:\n${raw}`,
+      expectJson: true,
+      temperature: 0,
+      signal
+    });
+    return parseJsonLoose(repaired);
+  }
 }
 
 export function parseJsonLoose(text) {

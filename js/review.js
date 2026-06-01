@@ -9,7 +9,7 @@ import { db } from "./shared.js";
 import {
   doc, updateDoc, addDoc, collection, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { callLLM, parseJsonLoose, isConfigured } from "./llm.js";
+import { callLLM, parseJsonLoose, isConfigured, callLLMJson } from "./llm.js";
 import { openSettingsModal } from "./settings.js?v=20260530";
 import { logAudit } from "./audit.js";
 import { openBusyOverlay } from "./shared.js";
@@ -128,25 +128,9 @@ async function ensureLLM() {
   return true;
 }
 
-async function callJson(system, user) {
-  const raw = await callLLM({ system, user, expectJson: true });
-  try {
-    return parseJsonLoose(raw);
-  } catch (firstErr) {
-    // Retry once with a stricter prompt. Catches the occasional case where
-    // the model added a trailing comma or stray prose. We re-feed the model
-    // its own (broken) output and ask for clean JSON of the same shape.
-    console.warn("[llm] parse failed once, retrying with cleanup prompt:", firstErr.message);
-    const cleanupSystem = "You are a JSON repair assistant. The user will paste broken or wrapped JSON. Return ONLY the corrected JSON, no prose, no fences. Preserve all data; only fix syntax.";
-    const repaired = await callLLM({
-      system: cleanupSystem,
-      user: `Broken output:\n${raw}`,
-      expectJson: true,
-      temperature: 0
-    });
-    return parseJsonLoose(repaired);
-  }
-}
+// Thin wrapper so all callsites in this module use the shared
+// JSON-with-repair helper from llm.js.
+const callJson = (system, user) => callLLMJson({ system, user });
 
 // ---------- Public API ----------
 
