@@ -22,15 +22,20 @@ const DEFAULTS = {
 // Numbers are the user-stated daily limits as of mid-2026. Google adjusts
 // these often; if real-world numbers differ, edit `dailyLimit` here.
 //
-// Gemma 4 model IDs follow the Gemma 3 naming convention (e.g. gemma-3-27b-it).
-// If Google's actual IDs differ, the "List models my key can use" button
-// in Settings shows the authoritative list — paste the real ID into the
-// Model field and it'll be used as a manual override.
+// Gemma 4 model IDs verified against Google's Hugging Face listing
+// (huggingface.co/google):
+//   - gemma-4-31b-it       — 31B dense, instruction-tuned
+//   - gemma-4-26b-a4b-it   — 26B MoE (4B active params), instruction-tuned
+//   - gemma-4-e4b-it       — effective 4B, smaller variant
+//   - gemma-4-e2b-it       — effective 2B, smallest variant
+// IDs are lowercased here to match the Gemini API URL convention
+// (Gemma 3 uses gemma-3-27b-it lowercase). If Google's API expects
+// mixed case (e.g. gemma-4-31B-it), one edit here updates everything.
 export const GEMINI_FALLBACK_CHAIN = [
   { id: "gemini-2.5-flash",       dailyLimit: 20,   label: "Gemini 2.5 Flash" },
   { id: "gemini-2.5-flash-lite",  dailyLimit: 20,   label: "Gemini 2.5 Flash Lite" },
-  { id: "gemma-4-31b-it",         dailyLimit: 1500, label: "Gemma 4 31B" },
-  { id: "gemma-4-26b-it",         dailyLimit: 1500, label: "Gemma 4 26B" }
+  { id: "gemma-4-31b-it",         dailyLimit: 1500, label: "Gemma 4 31B (dense)" },
+  { id: "gemma-4-26b-a4b-it",     dailyLimit: 1500, label: "Gemma 4 26B-A4B (MoE)" }
 ];
 
 // Suggested models for the autocomplete picker. The first four are the
@@ -41,6 +46,10 @@ export const GEMINI_MODELS = [
     id: m.id,
     label: `${m.id} — ${m.label} · ${m.dailyLimit}/day free${i === 0 ? " (default — chain auto-falls through)" : ""}`
   })),
+  // Smaller Gemma 4 variants — useful for very high throughput needs
+  { id: "gemma-4-e4b-it",         label: "gemma-4-e4b-it — Gemma 4 4B (effective), tiny / fast" },
+  { id: "gemma-4-e2b-it",         label: "gemma-4-e2b-it — Gemma 4 2B (effective), tinier / faster" },
+
   // Pro and legacy / Gemma 3 family — manual selection only
   { id: "gemini-2.5-pro",         label: "gemini-2.5-pro — smartest, lowest free quota" },
   { id: "gemini-2.0-flash",       label: "gemini-2.0-flash — older (usually paid tier only)" },
