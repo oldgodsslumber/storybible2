@@ -1,4 +1,4 @@
-// Auto-generated from Modern_Roll_Tables docx by parse_oracle.mjs + parse_names.mjs. Do not edit by hand.
+// Auto-generated. Do not edit by hand.
 export const ORACLE = {
   "tables": [
     {
@@ -19970,6 +19970,361 @@ export const ORACLE = {
         ],
         [
           "Jakubiak"
+        ]
+      ]
+    },
+    {
+      "sectionId": "17",
+      "section": "Prized Possessions",
+      "name": "Prized Possessions",
+      "dice": "d20",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "entries": [
+        [
+          "Healthcare & Medical"
+        ],
+        [
+          "Retail & Consumer Goods"
+        ],
+        [
+          "Construction & Trades"
+        ],
+        [
+          "Education"
+        ],
+        [
+          "Food Service & Hospitality"
+        ],
+        [
+          "Transportation & Logistics"
+        ],
+        [
+          "Technology & IT"
+        ],
+        [
+          "Finance & Banking"
+        ],
+        [
+          "Government & Public Service"
+        ],
+        [
+          "Manufacturing & Industrial"
+        ],
+        [
+          "Agriculture & Natural Resources"
+        ],
+        [
+          "Legal & Compliance"
+        ],
+        [
+          "Real Estate & Property"
+        ],
+        [
+          "Arts, Media & Entertainment"
+        ],
+        [
+          "Personal & Household Services"
+        ],
+        [
+          "Non-Profit & Social Services"
+        ],
+        [
+          "Energy & Utilities"
+        ],
+        [
+          "Automotive & Repair"
+        ],
+        [
+          "Science & Research"
+        ],
+        [
+          "Insurance & Risk Management"
+        ]
+      ]
+    },
+    {
+      "sectionId": "18",
+      "section": "Education Level",
+      "name": "Education Level",
+      "dice": "d20",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "entries": [
+        [
+          "Healthcare & Medical"
+        ],
+        [
+          "Retail & Consumer Goods"
+        ],
+        [
+          "Construction & Trades"
+        ],
+        [
+          "Education"
+        ],
+        [
+          "Food Service & Hospitality"
+        ],
+        [
+          "Transportation & Logistics"
+        ],
+        [
+          "Technology & IT"
+        ],
+        [
+          "Finance & Banking"
+        ],
+        [
+          "Government & Public Service"
+        ],
+        [
+          "Manufacturing & Industrial"
+        ],
+        [
+          "Agriculture & Natural Resources"
+        ],
+        [
+          "Legal & Compliance"
+        ],
+        [
+          "Real Estate & Property"
+        ],
+        [
+          "Arts, Media & Entertainment"
+        ],
+        [
+          "Personal & Household Services"
+        ],
+        [
+          "Non-Profit & Social Services"
+        ],
+        [
+          "Energy & Utilities"
+        ],
+        [
+          "Automotive & Repair"
+        ],
+        [
+          "Science & Research"
+        ],
+        [
+          "Insurance & Risk Management"
+        ]
+      ]
+    },
+    {
+      "sectionId": "19",
+      "section": "Living Situation",
+      "name": "Living Situation",
+      "dice": "d20",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "entries": [
+        [
+          "Healthcare & Medical"
+        ],
+        [
+          "Retail & Consumer Goods"
+        ],
+        [
+          "Construction & Trades"
+        ],
+        [
+          "Education"
+        ],
+        [
+          "Food Service & Hospitality"
+        ],
+        [
+          "Transportation & Logistics"
+        ],
+        [
+          "Technology & IT"
+        ],
+        [
+          "Finance & Banking"
+        ],
+        [
+          "Government & Public Service"
+        ],
+        [
+          "Manufacturing & Industrial"
+        ],
+        [
+          "Agriculture & Natural Resources"
+        ],
+        [
+          "Legal & Compliance"
+        ],
+        [
+          "Real Estate & Property"
+        ],
+        [
+          "Arts, Media & Entertainment"
+        ],
+        [
+          "Personal & Household Services"
+        ],
+        [
+          "Non-Profit & Social Services"
+        ],
+        [
+          "Energy & Utilities"
+        ],
+        [
+          "Automotive & Repair"
+        ],
+        [
+          "Science & Research"
+        ],
+        [
+          "Insurance & Risk Management"
+        ]
+      ]
+    },
+    {
+      "sectionId": "20",
+      "section": "Income Bracket",
+      "name": "Income Bracket",
+      "dice": "d20",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "entries": [
+        [
+          "Healthcare & Medical"
+        ],
+        [
+          "Retail & Consumer Goods"
+        ],
+        [
+          "Construction & Trades"
+        ],
+        [
+          "Education"
+        ],
+        [
+          "Food Service & Hospitality"
+        ],
+        [
+          "Transportation & Logistics"
+        ],
+        [
+          "Technology & IT"
+        ],
+        [
+          "Finance & Banking"
+        ],
+        [
+          "Government & Public Service"
+        ],
+        [
+          "Manufacturing & Industrial"
+        ],
+        [
+          "Agriculture & Natural Resources"
+        ],
+        [
+          "Legal & Compliance"
+        ],
+        [
+          "Real Estate & Property"
+        ],
+        [
+          "Arts, Media & Entertainment"
+        ],
+        [
+          "Personal & Household Services"
+        ],
+        [
+          "Non-Profit & Social Services"
+        ],
+        [
+          "Energy & Utilities"
+        ],
+        [
+          "Automotive & Repair"
+        ],
+        [
+          "Science & Research"
+        ],
+        [
+          "Insurance & Risk Management"
+        ]
+      ]
+    },
+    {
+      "sectionId": "12",
+      "section": "Local Official Position Table",
+      "name": "Local Official Position",
+      "dice": "d20",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "entries": [
+        [
+          "Healthcare & Medical"
+        ],
+        [
+          "Retail & Consumer Goods"
+        ],
+        [
+          "Construction & Trades"
+        ],
+        [
+          "Education"
+        ],
+        [
+          "Food Service & Hospitality"
+        ],
+        [
+          "Transportation & Logistics"
+        ],
+        [
+          "Technology & IT"
+        ],
+        [
+          "Finance & Banking"
+        ],
+        [
+          "Government & Public Service"
+        ],
+        [
+          "Manufacturing & Industrial"
+        ],
+        [
+          "Agriculture & Natural Resources"
+        ],
+        [
+          "Legal & Compliance"
+        ],
+        [
+          "Real Estate & Property"
+        ],
+        [
+          "Arts, Media & Entertainment"
+        ],
+        [
+          "Personal & Household Services"
+        ],
+        [
+          "Non-Profit & Social Services"
+        ],
+        [
+          "Energy & Utilities"
+        ],
+        [
+          "Automotive & Repair"
+        ],
+        [
+          "Science & Research"
+        ],
+        [
+          "Insurance & Risk Management"
         ]
       ]
     }

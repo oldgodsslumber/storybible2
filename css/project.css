@@ -534,110 +534,167 @@ body { display: flex; flex-direction: column; height: 100vh; }
 .scene-proposal-modal { max-width: 600px; }
 .proposal-meta { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
 
-/* Oracle */
-#oracleView { padding: 0; display: flex; flex-direction: column; }
+/* ---------- Oracle (redesigned: categories + collapsible cards) ---------- */
+#oracleView { padding: 0; display: flex; flex-direction: column; overflow: auto; }
 .oracle-header { padding: 18px 24px 10px; border-bottom: 1px solid var(--border); }
 .oracle-header h2 { margin: 0 0 4px 0; }
-.oracle-layout {
-  flex: 1;
-  display: grid;
-  grid-template-columns: 320px 1fr;
-  overflow: hidden;
-}
-.oracle-sidebar {
-  border-right: 1px solid var(--border);
-  background: var(--bg-elev);
-  padding: 14px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.oracle-sidebar input[type=search] {
+.oracle-wrap {
+  position: relative;
+  padding: 16px 24px 32px;
+  max-width: 900px;
+  margin: 0 auto;
   width: 100%;
 }
-.oracle-section-list { display: flex; flex-direction: column; gap: 14px; }
-.oracle-section h3 {
-  margin: 0 0 6px 0;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--muted);
-}
-.oracle-section ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.oracle-table-link {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 13px;
-  border: 1px solid transparent;
-  background: var(--bg-elev-2);
-}
-.oracle-table-link:hover { border-color: var(--accent); }
-.oracle-table-link.active { background: rgba(122,156,255,0.18); border-color: var(--accent); }
-.oracle-table-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.oracle-table-dice { flex-shrink: 0; }
+.oracle-toolbar { margin-bottom: 16px; }
+.oracle-toolbar input[type=search] { width: 100%; }
 
-.oracle-main {
-  overflow-y: auto;
-  padding: 20px 28px;
+.oracle-categories {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 10px;
 }
-.oracle-table-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
-}
-.oracle-table-header h3 { margin: 0; }
-.oracle-result {
+
+/* Category collapsible */
+.oracle-category {
   background: var(--bg-elev);
-  border: 1px solid var(--accent);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 18px 20px;
+  overflow: hidden;
+}
+.oracle-cat-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.oracle-cat-summary::-webkit-details-marker { display: none; }
+.oracle-cat-caret {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--muted);
+  transition: transform 0.15s;
+  width: 12px;
+  text-align: center;
+}
+.oracle-category[open] > .oracle-cat-summary > .oracle-cat-caret { transform: rotate(90deg); }
+.oracle-cat-title { flex: 1; font-weight: 600; font-size: 15px; }
+.oracle-cat-count { flex-shrink: 0; }
+.oracle-cat-body { padding: 6px 16px 16px; display: flex; flex-direction: column; gap: 8px; }
+.oracle-cat-desc { margin: 0 0 6px 0; }
+
+/* Nation collapsible (nested inside the Names category) */
+.oracle-nation {
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.oracle-nation-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+.oracle-nation-summary::-webkit-details-marker { display: none; }
+.oracle-nation-caret {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--muted);
+  transition: transform 0.15s;
+  width: 12px;
+  text-align: center;
+}
+.oracle-nation[open] > .oracle-nation-summary > .oracle-nation-caret { transform: rotate(90deg); }
+.oracle-nation-title { flex: 1; font-weight: 600; font-size: 14px; }
+.oracle-nation-fullname { flex-shrink: 0; }
+.oracle-nation-body { padding: 4px 14px 12px; display: flex; flex-direction: column; gap: 6px; }
+
+/* Table card (the actual rollable thing) */
+.oracle-table-card {
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.oracle-nation .oracle-table-card { background: var(--bg-elev); }
+.oracle-card-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.oracle-card-summary::-webkit-details-marker { display: none; }
+.oracle-card-caret {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--muted);
+  transition: transform 0.15s;
+  width: 12px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.oracle-table-card[open] > .oracle-card-summary > .oracle-card-caret { transform: rotate(90deg); }
+.oracle-card-info {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 1px;
 }
-.oracle-result-main {
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--text);
+.oracle-card-name { font-weight: 500; font-size: 14px; }
+.oracle-card-dice { font-size: 12px; }
+.oracle-card-last { font-size: 12px; color: var(--accent); }
+.oracle-card-roll {
+  flex-shrink: 0;
+  min-width: 44px;
+  padding: 6px 12px;
 }
-.oracle-result-detail { font-family: ui-monospace, monospace; }
-.oracle-result .copy-result { align-self: flex-start; margin-top: 6px; }
-
-.oracle-entries summary {
-  cursor: pointer;
-  font-size: 13px;
-  color: var(--muted);
-  padding: 6px 0;
+.oracle-card-body {
+  padding: 8px 14px 12px;
+  background: var(--bg);
+  max-height: 360px;
+  overflow-y: auto;
 }
-.oracle-entries summary:hover { color: var(--text); }
 .oracle-entry-list {
-  margin: 8px 0 0 20px;
+  margin: 0;
+  padding-left: 24px;
   font-size: 13px;
   color: var(--text);
 }
 .oracle-entry-list li { padding: 2px 0; }
 
-.oracle-history { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+/* Floating toast result (visible regardless of card collapse state) */
+.oracle-toast {
+  position: sticky;
+  top: 8px;
+  z-index: 10;
+  background: var(--accent);
+  color: #0f0f14;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+}
+.oracle-toast.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+/* Recent rolls history */
+.oracle-history { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); }
 .oracle-history h4 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin: 0 0 8px 0;
   font-size: 12px;
   text-transform: uppercase;
@@ -652,6 +709,15 @@ body { display: flex; flex-direction: column; height: 100vh; }
   padding: 8px 12px;
 }
 .oracle-history-main { font-size: 14px; }
+
+/* Mobile: tighter padding */
+@media (max-width: 768px) {
+  .oracle-wrap { padding: 12px 12px 80px; }
+  .oracle-header { padding: 12px 14px 8px; }
+  .oracle-cat-summary { padding: 14px; }
+  .oracle-card-summary { padding: 12px; }
+  .oracle-card-roll { min-height: 40px; }
+}
 
 /* Kanban */
 .kanban-header { margin-bottom: 16px; }

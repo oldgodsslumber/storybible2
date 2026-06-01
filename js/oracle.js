@@ -1,106 +1,259 @@
-// Oracle tab — roll on tables extracted from the Modern Random Roll Tables doc.
+// Oracle tab — themed categories, collapsible cards, roll-from-collapsed.
 // Data lives in oracle-data.js (auto-generated).
 
 import { ORACLE } from "./oracle-data.js";
 
 const HISTORY_LIMIT = 30;
-let history = [];          // [{tableName, result, ts}]
-let activeTableId = null;  // sectionId|name
+let history = [];          // {tableName, result, ts}
+const lastRollByTableKey = new Map(); // tableKey -> { result, detail }
 
-function tableId(t) { return `${t.sectionId}|${t.name}`; }
+function tableKey(t) { return `${t.sectionId}|${t.name}`; }
 
-function sectionsGrouped() {
-  const groups = new Map();
-  for (const t of ORACLE.tables) {
-    if (!groups.has(t.sectionId)) {
-      groups.set(t.sectionId, { id: t.sectionId, title: t.section, tables: [] });
-    }
-    groups.get(t.sectionId).tables.push(t);
+// ----- Category metadata -----
+// Maps tables to thematic categories. Each table appears in exactly one
+// category. Tables without an explicit mapping fall into "Other".
+
+const COUNTRIES = [
+  "United States", "Mexico", "United Kingdom", "Brazil", "India",
+  "Nigeria", "Japan", "Germany", "France", "China",
+  "Russia", "South Korea", "Italy", "Australia", "Argentina",
+  "Philippines", "Egypt", "Pakistan", "Colombia", "Poland"
+];
+
+const CATEGORIES = [
+  {
+    id: "names",
+    title: "Names by Nation",
+    description: "First and last names for 20 nations. Pick a nation to see all four name tables together.",
+    match: (t) => t.sectionId === "4" || t.sectionId === "4b",
+    layout: "byNation"
+  },
+  {
+    id: "jobs",
+    title: "Jobs & Industry",
+    description: "Master industry table plus the d20 sub-tables for each industry's specific jobs.",
+    match: (t) => t.sectionId === "1" || t.sectionId === "1b"
+  },
+  {
+    id: "businesses",
+    title: "Businesses & Megacorps",
+    description: "Small business and megacorp generators, plus dossier tables for fleshing them out.",
+    match: (t) => ["8", "13", "13b"].includes(t.sectionId)
+  },
+  {
+    id: "food-drink",
+    title: "Food & Drink Establishments",
+    description: "Fast food, value meals, dive bars, upscale bars, and pretentious drinks.",
+    match: (t) => ["7", "7b", "10", "10b", "10c"].includes(t.sectionId)
+  },
+  {
+    id: "media",
+    title: "Media Names",
+    description: "Newspapers and news networks.",
+    match: (t) => ["5", "6"].includes(t.sectionId)
+  },
+  {
+    id: "education",
+    title: "Education & Colleges",
+    description: "College name generators, degree focus, and university dossier tables.",
+    match: (t) => ["15b", "15c", "15d"].includes(t.sectionId)
+  },
+  {
+    id: "civic",
+    title: "Civic & Public",
+    description: "Local officials and other public roles.",
+    match: (t) => ["12"].includes(t.sectionId)
+  },
+  {
+    id: "places",
+    title: "Places & Locations",
+    description: "Location types and atmospheric venue generators.",
+    match: (t) => t.sectionId === "2"
+  },
+  {
+    id: "backstory",
+    title: "Character Backstory",
+    description: "Snapshot details: vehicle, possessions, education, living situation, income, childhood trauma.",
+    match: (t) => ["16", "17", "18", "19", "20", "21"].includes(t.sectionId)
+  },
+  {
+    id: "antagonist",
+    title: "Antagonist & Crime",
+    description: "Villain motivations, gang names, drug street names, criminal records.",
+    match: (t) => ["3", "14", "15", "22"].includes(t.sectionId)
+  },
+  {
+    id: "other",
+    title: "Other",
+    description: "Tables that don't fit anywhere else.",
+    match: () => true // catch-all
   }
-  // Sort sections by numeric id where possible
-  return [...groups.values()].sort((a, b) => {
-    const an = parseInt(a.id, 10);
-    const bn = parseInt(b.id, 10);
-    if (an !== bn) return an - bn;
-    return a.id.localeCompare(b.id);
-  });
-}
+];
+
+// ----- Render entry point -----
 
 export function renderOracle(container) {
-  const sectionListEl = container.querySelector("#oracleSectionList");
+  const categoriesEl = container.querySelector("#oracleCategories");
   const searchEl = container.querySelector("#oracleSearch");
-  const panelEl = container.querySelector("#oracleTablePanel");
-  const emptyEl = container.querySelector("#oracleEmpty");
   const historyEl = container.querySelector("#oracleHistory");
 
-  function renderSidebar(filter) {
-    sectionListEl.innerHTML = "";
+  function render(filter) {
     const q = (filter || "").trim().toLowerCase();
-    const groups = sectionsGrouped();
-    let anyVisible = false;
-    for (const g of groups) {
-      const filteredTables = g.tables.filter(t =>
-        !q || t.name.toLowerCase().includes(q) || g.title.toLowerCase().includes(q)
-      );
-      if (filteredTables.length === 0) continue;
-      anyVisible = true;
-      const sec = document.createElement("section");
-      sec.className = "oracle-section";
-      sec.innerHTML = `
-        <h3>${esc(g.id)}. ${esc(g.title)}</h3>
-        <ul></ul>
-      `;
-      const ul = sec.querySelector("ul");
-      for (const t of filteredTables) {
-        const li = document.createElement("li");
-        const id = tableId(t);
-        li.className = "oracle-table-link" + (id === activeTableId ? " active" : "");
-        li.innerHTML = `
-          <span class="oracle-table-name">${esc(t.name)}</span>
-          <span class="oracle-table-dice muted small">${esc(t.dice)}</span>
-        `;
-        li.addEventListener("click", () => {
-          activeTableId = id;
-          renderSidebar(searchEl.value);
-          renderTablePanel(t);
-        });
-        ul.appendChild(li);
+    categoriesEl.innerHTML = "";
+
+    // Bucket tables into categories (first match wins).
+    const buckets = new Map(CATEGORIES.map(c => [c.id, []]));
+    for (const t of ORACLE.tables) {
+      for (const c of CATEGORIES) {
+        if (c.match(t)) { buckets.get(c.id).push(t); break; }
       }
-      sectionListEl.appendChild(sec);
     }
-    if (!anyVisible) {
-      sectionListEl.innerHTML = `<p class="muted small">No tables match "${esc(q)}".</p>`;
-    }
-  }
 
-  function renderTablePanel(t) {
-    emptyEl.classList.add("hidden");
-    panelEl.classList.remove("hidden");
-    panelEl.innerHTML = `
-      <header class="oracle-table-header">
-        <div>
-          <h3>${esc(t.name)}</h3>
-          <p class="muted small">${esc(t.section)} · ${esc(t.dice)}${t.parentRoll ? ` · sub-table ${esc(t.parentRoll)}` : ""}</p>
+    let anyVisible = false;
+    for (const cat of CATEGORIES) {
+      const tables = buckets.get(cat.id);
+      if (!tables || tables.length === 0) continue;
+
+      // Apply search filter (skip if no match within this category)
+      const matched = q ? tables.filter(t =>
+        t.name.toLowerCase().includes(q) ||
+        cat.title.toLowerCase().includes(q) ||
+        t.section.toLowerCase().includes(q)
+      ) : tables;
+      if (matched.length === 0) continue;
+      anyVisible = true;
+
+      const catEl = document.createElement("details");
+      catEl.className = "oracle-category";
+      // Open the category if there's an active search match; otherwise closed.
+      if (q) catEl.open = true;
+      catEl.innerHTML = `
+        <summary class="oracle-cat-summary">
+          <span class="oracle-cat-caret">▶</span>
+          <span class="oracle-cat-title">${esc(cat.title)}</span>
+          <span class="oracle-cat-count muted small">${matched.length} table${matched.length === 1 ? "" : "s"}</span>
+        </summary>
+        <div class="oracle-cat-body">
+          ${cat.description ? `<p class="muted small oracle-cat-desc">${esc(cat.description)}</p>` : ""}
         </div>
-        <button class="primary roll-btn">🎲 Roll</button>
-      </header>
-      <div class="oracle-result hidden" id="oracleResult"></div>
-      <details class="oracle-entries">
-        <summary>Show all ${t.entries.length} entries</summary>
-        <ol class="oracle-entry-list"></ol>
-      </details>
-    `;
-    const list = panelEl.querySelector(".oracle-entry-list");
-    t.entries.forEach((row, idx) => {
-      const li = document.createElement("li");
-      li.value = idx + 1;
-      li.textContent = renderEntryText(row);
-      list.appendChild(li);
-    });
-    panelEl.querySelector(".roll-btn").addEventListener("click", () => rollOn(t));
+      `;
+      const body = catEl.querySelector(".oracle-cat-body");
+
+      if (cat.layout === "byNation") {
+        renderNationsLayout(body, matched, q);
+      } else {
+        for (const t of matched) body.appendChild(renderTableCard(t));
+      }
+      categoriesEl.appendChild(catEl);
+    }
+
+    if (!anyVisible) {
+      categoriesEl.innerHTML = `<p class="muted">No tables match "${esc(q)}".</p>`;
+    }
   }
 
-  function rollOn(t) {
+  function renderNationsLayout(body, nameTables, q) {
+    // Group by nation. Each country gets a nested collapsible with its four
+    // name tables grouped together (combined first, female, male, last).
+    const byNation = new Map();
+    for (const t of nameTables) {
+      const country = COUNTRIES.find(c => t.name.startsWith(c + " "));
+      if (!country) continue;
+      if (!byNation.has(country)) byNation.set(country, []);
+      byNation.get(country).push(t);
+    }
+    // Render countries in the canonical roll order
+    for (const country of COUNTRIES) {
+      const tables = byNation.get(country);
+      if (!tables || tables.length === 0) continue;
+      // Sort: First Names → Female First Names → Male First Names → Last Names
+      const order = ["First Names", "Female First Names", "Male First Names", "Last Names"];
+      tables.sort((a, b) => {
+        const an = a.name.replace(country + " — ", "");
+        const bn = b.name.replace(country + " — ", "");
+        return order.indexOf(an) - order.indexOf(bn);
+      });
+      const nationEl = document.createElement("details");
+      nationEl.className = "oracle-nation";
+      if (q) nationEl.open = true;
+      // Find the combined first names and last names tables for the "Full name" quick roll
+      const combinedFirst = tables.find(t => t.name.endsWith("— First Names"));
+      const lastNames = tables.find(t => t.name.endsWith("— Last Names"));
+      const hasFullName = combinedFirst && lastNames;
+      nationEl.innerHTML = `
+        <summary class="oracle-nation-summary">
+          <span class="oracle-nation-caret">▶</span>
+          <span class="oracle-nation-title">${esc(country)}</span>
+          ${hasFullName ? `<button class="oracle-nation-fullname primary small" type="button">🎲 Full name</button>` : ""}
+        </summary>
+        <div class="oracle-nation-body"></div>
+      `;
+      const nbody = nationEl.querySelector(".oracle-nation-body");
+      for (const t of tables) nbody.appendChild(renderTableCard(t, /*compactLabel*/ true, country));
+
+      if (hasFullName) {
+        nationEl.querySelector(".oracle-nation-fullname").addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const first = rollSilently(combinedFirst);
+          const last  = rollSilently(lastNames);
+          // Strip "(F)/(M)" tag from first name
+          const firstClean = (first.value || "").replace(/\s*\([FM]\)\s*$/, "");
+          const full = `${firstClean} ${last.value}`;
+          recordRoll(`${country} — Full Name`, country, full, `${first.detail}  +  ${last.detail}`);
+          showFloatingResult(`${country}: ${full}`);
+        });
+      }
+      body.appendChild(nationEl);
+    }
+  }
+
+  function renderTableCard(t, compactLabel = false, stripPrefix = "") {
+    const card = document.createElement("details");
+    card.className = "oracle-table-card";
+    const tk = tableKey(t);
+    const last = lastRollByTableKey.get(tk);
+    const displayName = compactLabel && stripPrefix
+      ? t.name.replace(`${stripPrefix} — `, "")
+      : t.name;
+    card.innerHTML = `
+      <summary class="oracle-card-summary">
+        <span class="oracle-card-caret">▶</span>
+        <div class="oracle-card-info">
+          <span class="oracle-card-name">${esc(displayName)}</span>
+          <span class="oracle-card-dice muted small">${esc(t.dice)} · ${t.entries.length} entries</span>
+          ${last ? `<span class="oracle-card-last muted small">last: <strong>${esc(last.result)}</strong></span>` : ""}
+        </div>
+        <button class="oracle-card-roll primary small" type="button" title="Roll">🎲</button>
+      </summary>
+      <div class="oracle-card-body">
+        <ol class="oracle-entry-list">
+          ${t.entries.map(row => `<li>${esc(renderEntryText(row))}</li>`).join("")}
+        </ol>
+      </div>
+    `;
+    card.querySelector(".oracle-card-roll").addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const r = rollSilently(t);
+      lastRollByTableKey.set(tk, r);
+      // Update the "last" line in this card's summary without rerendering everything
+      const info = card.querySelector(".oracle-card-info");
+      let lastEl = info.querySelector(".oracle-card-last");
+      if (!lastEl) {
+        lastEl = document.createElement("span");
+        lastEl.className = "oracle-card-last muted small";
+        info.appendChild(lastEl);
+      }
+      lastEl.innerHTML = `last: <strong>${esc(r.result)}</strong>`;
+      recordRoll(t.name, t.section, r.result, r.detail);
+      showFloatingResult(`${displayName}: ${r.result}`);
+    });
+    return card;
+  }
+
+  // Roll on a table; returns { result, detail } without touching the UI/history.
+  function rollSilently(t) {
     const sides = parseInt((t.dice.match(/d(\d+)/) || ["", "20"])[1], 10);
     const cols = t.columns || 1;
     const rolledValues = [];
@@ -116,19 +269,11 @@ export function renderOracle(container) {
     const detail = cols > 1
       ? rolledIndices.map((r, c) => `${r}: ${rolledValues[c]}`).join("  +  ")
       : `${rolledIndices[0]}: ${rolledValues[0]}`;
+    return { value: combined, result: combined, detail };
+  }
 
-    const resultEl = panelEl.querySelector("#oracleResult");
-    resultEl.classList.remove("hidden");
-    resultEl.innerHTML = `
-      <div class="oracle-result-main">${esc(combined)}</div>
-      <div class="oracle-result-detail muted small">${esc(detail)}</div>
-      <button class="ghost small copy-result">Copy</button>
-    `;
-    resultEl.querySelector(".copy-result").addEventListener("click", () => {
-      navigator.clipboard?.writeText(combined).catch(() => {});
-    });
-
-    history.unshift({ tableName: t.name, section: t.section, result: combined, detail, ts: Date.now() });
+  function recordRoll(tableName, section, result, detail) {
+    history.unshift({ tableName, section, result, detail, ts: Date.now() });
     if (history.length > HISTORY_LIMIT) history.length = HISTORY_LIMIT;
     renderHistory();
   }
@@ -138,7 +283,7 @@ export function renderOracle(container) {
       historyEl.innerHTML = "";
       return;
     }
-    historyEl.innerHTML = `<h4>Recent rolls</h4>`;
+    historyEl.innerHTML = `<h4>Recent rolls <button class="ghost small clear-rolls">Clear</button></h4>`;
     const ul = document.createElement("ul");
     ul.className = "oracle-history-list";
     for (const h of history) {
@@ -150,10 +295,30 @@ export function renderOracle(container) {
       ul.appendChild(li);
     }
     historyEl.appendChild(ul);
+    historyEl.querySelector(".clear-rolls").addEventListener("click", () => {
+      history = [];
+      renderHistory();
+    });
   }
 
-  searchEl.addEventListener("input", () => renderSidebar(searchEl.value));
-  renderSidebar("");
+  // Floating toast at the top of the panel so the user sees the roll
+  // result without having to scroll to the history.
+  let toastTimer = null;
+  function showFloatingResult(text) {
+    let toast = container.querySelector(".oracle-toast");
+    if (!toast) {
+      toast = document.createElement("div");
+      toast.className = "oracle-toast";
+      container.appendChild(toast);
+    }
+    toast.textContent = text;
+    toast.classList.add("show");
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove("show"), 3000);
+  }
+
+  searchEl.addEventListener("input", () => render(searchEl.value));
+  render("");
   renderHistory();
 }
 

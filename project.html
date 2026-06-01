@@ -121,16 +121,12 @@
         <h2>Oracle</h2>
         <p class="muted small">Roll tables for modern-setting story prompts: jobs, names, locations, generators, character backstory, villain motives.</p>
       </div>
-      <div class="oracle-layout">
-        <aside class="oracle-sidebar">
-          <input id="oracleSearch" type="search" placeholder="Filter tables…" />
-          <div id="oracleSectionList" class="oracle-section-list"></div>
-        </aside>
-        <main class="oracle-main">
-          <div id="oracleEmpty" class="muted">Pick a table from the left to roll on it.</div>
-          <div id="oracleTablePanel" class="hidden"></div>
-          <div id="oracleHistory" class="oracle-history"></div>
-        </main>
+      <div class="oracle-wrap">
+        <div class="oracle-toolbar">
+          <input id="oracleSearch" type="search" placeholder="Search tables…" />
+        </div>
+        <div id="oracleCategories" class="oracle-categories"></div>
+        <div id="oracleHistory" class="oracle-history"></div>
       </div>
     </section>
 
