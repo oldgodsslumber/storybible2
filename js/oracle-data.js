@@ -4264,48 +4264,6 @@ export const ORACLE = {
       ]
     },
     {
-      "sectionId": "15c",
-      "section": "College Degree Focus Table (d20)",
-      "name": "15c. College Degree Focus Table",
-      "dice": "d20",
-      "diceKind": "single",
-      "columns": 1,
-      "parentRoll": null,
-      "entries": [
-        [
-          "Associate of Arts (AA)"
-        ]
-      ]
-    },
-    {
-      "sectionId": "21",
-      "section": "Childhood Trauma Generator (d100 + d100)",
-      "name": "Table A — Action Word",
-      "dice": "d100",
-      "diceKind": "single",
-      "columns": 1,
-      "parentRoll": null,
-      "entries": [
-        [
-          "Abandoned"
-        ]
-      ]
-    },
-    {
-      "sectionId": "21",
-      "section": "Childhood Trauma Generator (d100 + d100)",
-      "name": "Table B — Noun",
-      "dice": "d100",
-      "diceKind": "single",
-      "columns": 1,
-      "parentRoll": null,
-      "entries": [
-        [
-          "Aunt"
-        ]
-      ]
-    },
-    {
       "sectionId": "22",
       "section": "Villain Motivation Generator (d100 + d100)",
       "name": "Table A — Motivation Word",
@@ -19628,290 +19586,6 @@ export const ORACLE = {
       ]
     },
     {
-      "sectionId": "17",
-      "section": "Prized Possessions",
-      "name": "Prized Possessions",
-      "dice": "d20",
-      "diceKind": "single",
-      "columns": 1,
-      "parentRoll": null,
-      "entries": [
-        [
-          "Healthcare & Medical"
-        ],
-        [
-          "Retail & Consumer Goods"
-        ],
-        [
-          "Construction & Trades"
-        ],
-        [
-          "Education"
-        ],
-        [
-          "Food Service & Hospitality"
-        ],
-        [
-          "Transportation & Logistics"
-        ],
-        [
-          "Technology & IT"
-        ],
-        [
-          "Finance & Banking"
-        ],
-        [
-          "Government & Public Service"
-        ],
-        [
-          "Manufacturing & Industrial"
-        ],
-        [
-          "Agriculture & Natural Resources"
-        ],
-        [
-          "Legal & Compliance"
-        ],
-        [
-          "Real Estate & Property"
-        ],
-        [
-          "Arts, Media & Entertainment"
-        ],
-        [
-          "Personal & Household Services"
-        ],
-        [
-          "Non-Profit & Social Services"
-        ],
-        [
-          "Energy & Utilities"
-        ],
-        [
-          "Automotive & Repair"
-        ],
-        [
-          "Science & Research"
-        ],
-        [
-          "Insurance & Risk Management"
-        ]
-      ]
-    },
-    {
-      "sectionId": "18",
-      "section": "Education Level",
-      "name": "Education Level",
-      "dice": "d20",
-      "diceKind": "single",
-      "columns": 1,
-      "parentRoll": null,
-      "entries": [
-        [
-          "Healthcare & Medical"
-        ],
-        [
-          "Retail & Consumer Goods"
-        ],
-        [
-          "Construction & Trades"
-        ],
-        [
-          "Education"
-        ],
-        [
-          "Food Service & Hospitality"
-        ],
-        [
-          "Transportation & Logistics"
-        ],
-        [
-          "Technology & IT"
-        ],
-        [
-          "Finance & Banking"
-        ],
-        [
-          "Government & Public Service"
-        ],
-        [
-          "Manufacturing & Industrial"
-        ],
-        [
-          "Agriculture & Natural Resources"
-        ],
-        [
-          "Legal & Compliance"
-        ],
-        [
-          "Real Estate & Property"
-        ],
-        [
-          "Arts, Media & Entertainment"
-        ],
-        [
-          "Personal & Household Services"
-        ],
-        [
-          "Non-Profit & Social Services"
-        ],
-        [
-          "Energy & Utilities"
-        ],
-        [
-          "Automotive & Repair"
-        ],
-        [
-          "Science & Research"
-        ],
-        [
-          "Insurance & Risk Management"
-        ]
-      ]
-    },
-    {
-      "sectionId": "19",
-      "section": "Living Situation",
-      "name": "Living Situation",
-      "dice": "d20",
-      "diceKind": "single",
-      "columns": 1,
-      "parentRoll": null,
-      "entries": [
-        [
-          "Healthcare & Medical"
-        ],
-        [
-          "Retail & Consumer Goods"
-        ],
-        [
-          "Construction & Trades"
-        ],
-        [
-          "Education"
-        ],
-        [
-          "Food Service & Hospitality"
-        ],
-        [
-          "Transportation & Logistics"
-        ],
-        [
-          "Technology & IT"
-        ],
-        [
-          "Finance & Banking"
-        ],
-        [
-          "Government & Public Service"
-        ],
-        [
-          "Manufacturing & Industrial"
-        ],
-        [
-          "Agriculture & Natural Resources"
-        ],
-        [
-          "Legal & Compliance"
-        ],
-        [
-          "Real Estate & Property"
-        ],
-        [
-          "Arts, Media & Entertainment"
-        ],
-        [
-          "Personal & Household Services"
-        ],
-        [
-          "Non-Profit & Social Services"
-        ],
-        [
-          "Energy & Utilities"
-        ],
-        [
-          "Automotive & Repair"
-        ],
-        [
-          "Science & Research"
-        ],
-        [
-          "Insurance & Risk Management"
-        ]
-      ]
-    },
-    {
-      "sectionId": "20",
-      "section": "Income Bracket",
-      "name": "Income Bracket",
-      "dice": "d20",
-      "diceKind": "single",
-      "columns": 1,
-      "parentRoll": null,
-      "entries": [
-        [
-          "Healthcare & Medical"
-        ],
-        [
-          "Retail & Consumer Goods"
-        ],
-        [
-          "Construction & Trades"
-        ],
-        [
-          "Education"
-        ],
-        [
-          "Food Service & Hospitality"
-        ],
-        [
-          "Transportation & Logistics"
-        ],
-        [
-          "Technology & IT"
-        ],
-        [
-          "Finance & Banking"
-        ],
-        [
-          "Government & Public Service"
-        ],
-        [
-          "Manufacturing & Industrial"
-        ],
-        [
-          "Agriculture & Natural Resources"
-        ],
-        [
-          "Legal & Compliance"
-        ],
-        [
-          "Real Estate & Property"
-        ],
-        [
-          "Arts, Media & Entertainment"
-        ],
-        [
-          "Personal & Household Services"
-        ],
-        [
-          "Non-Profit & Social Services"
-        ],
-        [
-          "Energy & Utilities"
-        ],
-        [
-          "Automotive & Repair"
-        ],
-        [
-          "Science & Research"
-        ],
-        [
-          "Insurance & Risk Management"
-        ]
-      ]
-    },
-    {
       "sectionId": "12",
       "section": "Local Official Position Table",
       "name": "Local Official Position",
@@ -21809,6 +21483,1034 @@ export const ORACLE = {
         ],
         [
           "The board actually runs the school — President is a figurehead. Real decisions happen in closed sessions elsewhere"
+        ]
+      ]
+    },
+    {
+      "sectionId": "15c",
+      "section": "College Degree Focus Table",
+      "name": "College Degree Focus",
+      "dice": "d20",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "entries": [
+        [
+          "Associate of Arts (AA) — Liberal Arts, General Studies, Early Childhood Education, Business Admin"
+        ],
+        [
+          "Associate of Science (AS) — Nursing (pre-RN), Computer Science, Criminal Justice, Accounting"
+        ],
+        [
+          "Associate of Applied Science (AAS) — Automotive Technology, HVAC, Culinary Arts, Welding Technology"
+        ],
+        [
+          "Bachelor of Arts (BA) — English, History, Sociology, Political Science, Psychology, Philosophy"
+        ],
+        [
+          "Bachelor of Science (BS) — Biology, Chemistry, Computer Science, Mathematics, Physics, Nursing"
+        ],
+        [
+          "Bachelor of Business Administration (BBA) — Finance, Marketing, Management, Accounting, Entrepreneurship"
+        ],
+        [
+          "Bachelor of Fine Arts (BFA) — Graphic Design, Studio Art, Film, Photography, Creative Writing, Theater"
+        ],
+        [
+          "Bachelor of Social Work (BSW) — Human Services, Child & Family Studies, Community Organization"
+        ],
+        [
+          "Bachelor of Education (BEd) — Elementary Ed, Secondary Ed, Special Education, Physical Education"
+        ],
+        [
+          "Bachelor of Science in Nursing (BSN) — Registered Nursing, Healthcare Administration, Midwifery"
+        ],
+        [
+          "Bachelor of Engineering (BEng) — Civil, Mechanical, Electrical, Chemical, Computer, Aerospace"
+        ],
+        [
+          "Master of Arts (MA) — Counseling, Communication, History, Journalism, Creative Writing"
+        ],
+        [
+          "Master of Science (MS) — Data Science, Cybersecurity, Environmental Science, Public Health"
+        ],
+        [
+          "Master of Business Administration (MBA) — Finance, Strategy, Healthcare Management, International Business"
+        ],
+        [
+          "Master of Social Work (MSW) — Clinical Social Work, Policy, Community Practice"
+        ],
+        [
+          "Master of Education (MEd) — Curriculum & Instruction, Educational Leadership, School Counseling"
+        ],
+        [
+          "Juris Doctor (JD) — Law — Criminal, Civil, Corporate, Environmental, Immigration"
+        ],
+        [
+          "Doctor of Medicine (MD / DO) — General Medicine, Surgery, Psychiatry, Pediatrics, Internal Medicine"
+        ],
+        [
+          "Doctor of Philosophy (PhD) — Research-focused: Sciences, Humanities, Social Sciences, Engineering"
+        ],
+        [
+          "Professional / Specialist Degree — DDS (Dentist), PharmD, DVM (Vet), PsyD, Doctor of Physical Therapy"
+        ]
+      ]
+    },
+    {
+      "sectionId": "16",
+      "section": "Vehicle Owned",
+      "name": "Vehicle Owned",
+      "dice": "d20",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "entries": [
+        [
+          "Beater sedan (2000s make) — Barely running, mismatched panels, air fresheners stacked 6 deep"
+        ],
+        [
+          "Pickup truck (mid-size) — Mud on the wheel wells, stuff in the bed, one bumper sticker"
+        ],
+        [
+          "Full-size pickup — Work-used, dents, maybe a toolbox in the back"
+        ],
+        [
+          "Minivan — Sliding door that sticks, crumbs in seat creases"
+        ],
+        [
+          "SUV (mid-size, older) — Faded paint, maintenance light on for 8 months"
+        ],
+        [
+          "Hatchback — Practical, cheap, lots of fast food bags in footwell"
+        ],
+        [
+          "Muscle car (needs work) — Running, but barely. Will go fast or will die trying"
+        ],
+        [
+          "Cargo van (unmarked) — Used for work or hauling. Everyone wonders what's in it"
+        ],
+        [
+          "Motorcycle (cruiser style) — Paid off, ridden hard, saddlebags beat to hell"
+        ],
+        [
+          "Subaru wagon — Outdoorsy, stickers, dog hair on everything"
+        ],
+        [
+          "Classic American car (restored) — Their baby. Kept clean, worked on weekends"
+        ],
+        [
+          "Econobox commuter — Three owners before them, runs fine, no personality"
+        ],
+        [
+          "Lifted Jeep — Big tires, roll bar, questionable off-road usage ratio"
+        ],
+        [
+          "Company/work vehicle (personal use) — Logo on the door, don't ask"
+        ],
+        [
+          "Public transit only — Bus pass, knows every route, has opinions about route 9"
+        ],
+        [
+          "Bicycle (only) — By choice or by circumstance. You decide"
+        ],
+        [
+          "No vehicle — Borrows, rides with others, makes it work somehow"
+        ],
+        [
+          "Late-model luxury car (doesn't fit) — Nicer than everything else in their life. No explanation given"
+        ],
+        [
+          "Rides a scooter — 50cc, absolutely going highway speeds anyway"
+        ],
+        [
+          "→ Roll on the WEIRD VEHICLE sub-table — (see below)"
+        ]
+      ]
+    },
+    {
+      "sectionId": "17",
+      "section": "Prized Possessions",
+      "name": "Prized Possessions",
+      "dice": "d20",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "entries": [
+        [
+          "A parent or grandparent's tool — Beat-up, still works, name scratched on handle"
+        ],
+        [
+          "A firearm that belonged to a relative — Old, cleaned obsessively, never sold"
+        ],
+        [
+          "Childhood sports trophy — First or only one. Minor sport, huge deal"
+        ],
+        [
+          "Engraved pocket watch or lighter — Gift from someone long gone"
+        ],
+        [
+          "A dog-eared paperback — Read so many times the spine is gone"
+        ],
+        [
+          "Military dog tags (theirs or inherited) — Never talked about, always kept close"
+        ],
+        [
+          "A cassette or vinyl record — Last connection to a moment in time"
+        ],
+        [
+          "A hand-written recipe card — Grandparent's handwriting. Stained with grease or sauce"
+        ],
+        [
+          "A wedding ring (past relationship) — Kept anyway. For complicated reasons"
+        ],
+        [
+          "A scar they're proud of — Not an object. They'll explain if you ask"
+        ],
+        [
+          "A custom knife — Made by hand, used for everything"
+        ],
+        [
+          "Photos in a physical wallet — Laminated. People who died. No digital backup"
+        ],
+        [
+          "A lucky coin or stone — Superstitious. Won't say why"
+        ],
+        [
+          "A religious object — Cross, rosary, Saint's medallion. Maybe lapsed. Still kept"
+        ],
+        [
+          "An old vehicle title (paid off) — The truck. The car. Whatever it is — theirs, free and clear"
+        ],
+        [
+          "A handmade quilt — Someone made it for them. Irreplaceable"
+        ],
+        [
+          "A tattoo (specific) — Not just any tattoo — the first one, the meaningful one"
+        ],
+        [
+          "A piece of land (small) — Just an acre or two. Nobody's taking it"
+        ],
+        [
+          "A class ring or varsity letter — Peak of something they haven't matched since. They know."
+        ],
+        [
+          "→ Roll on the ABSURD POSSESSIONS sub-table — (see below)"
+        ]
+      ]
+    },
+    {
+      "sectionId": "20",
+      "section": "Income Bracket",
+      "name": "Income Bracket",
+      "dice": "d12",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "entries": [
+        [
+          "Below poverty line (under $15K) — Survival decisions every week. System navigation expertise"
+        ],
+        [
+          "Near poverty ($15K–$25K) — Working, still struggling. One bad month = crisis"
+        ],
+        [
+          "Low income ($25K–$35K) — Full-time, still tight. No safety net"
+        ],
+        [
+          "Lower-middle ($35K–$50K) — Covers basics. Treats are planned. Emergency fund: maybe $500"
+        ],
+        [
+          "Middle class ($50K–$70K) — Comfortable by most standards. One income family or two part-timers"
+        ],
+        [
+          "Solid middle ($70K–$90K) — Two incomes. Reasonable house. Vacation once a year"
+        ],
+        [
+          "Upper-middle ($90K–$120K) — Good job, good zip code. College fund started"
+        ],
+        [
+          "Professional class ($120K–$175K) — Doctor, lawyer, senior engineer. Thinks about taxes"
+        ],
+        [
+          "Upper income ($175K–$300K) — Very comfortable. Private school. Doesn't check the bill"
+        ],
+        [
+          "Wealthy ($300K–$750K) — Business owner, executive, surgeon. Second property"
+        ],
+        [
+          "High net worth ($750K–$2M/yr) — Investment income significant. Staff. Accountant on retainer"
+        ],
+        [
+          "Ultra-wealthy (over $2M/yr) — Money works for them. Problems regular people don't have"
+        ]
+      ]
+    },
+    {
+      "sectionId": "18",
+      "section": "Education Level",
+      "name": "Education Level",
+      "dice": "d20",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "entries": [
+        [
+          "No formal diploma — GED never finished either. Self-taught in practical ways"
+        ],
+        [
+          "GED — Finished later. Doesn't volunteer the information"
+        ],
+        [
+          "High school diploma — Graduated, nothing else pursued"
+        ],
+        [
+          "Some college, no degree — Left for money, life, or both. Will finish 'someday'"
+        ],
+        [
+          "Trade certificate — HVAC, welding, cosmetology, CDL, culinary, etc."
+        ],
+        [
+          "Associate's degree — Community college. Transferred or stopped there"
+        ],
+        [
+          "Bachelor's degree (unrelated to job) — Communications major managing a hardware store"
+        ],
+        [
+          "Bachelor's degree (related to job) — More or less on track"
+        ],
+        [
+          "Bachelor's degree + certification — Added a credential for the resume"
+        ],
+        [
+          "Bachelor's + some grad school — Didn't finish. The debt stayed"
+        ],
+        [
+          "Master's degree — In something specific. Ask them about it"
+        ],
+        [
+          "MBA — Can talk about synergy for 45 minutes straight"
+        ],
+        [
+          "Law degree (JD) — Practices law, or left it entirely, both interesting"
+        ],
+        [
+          "Medical degree (MD/DO) — Doctor. Or ex-doctor. Also interesting"
+        ],
+        [
+          "PhD — Academic, researcher, or completely not using it"
+        ],
+        [
+          "Multiple degrees — Chronic student. Either passion or avoidance"
+        ],
+        [
+          "Entirely self-taught (skilled) — No credentials, real expertise. Annoying in the best way"
+        ],
+        [
+          "Vocational / military training — Service or apprenticeship shaped them more than school"
+        ],
+        [
+          "Highly specialized certification — Nuclear, FAA, FINRA, medical subspecialty — narrow and deep"
+        ],
+        [
+          "Dropout from prestigious institution — Started somewhere notable. Didn't finish. Story there"
+        ]
+      ]
+    },
+    {
+      "sectionId": "19",
+      "section": "Living Situation",
+      "name": "Living Situation",
+      "dice": "d20",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "entries": [
+        [
+          "Owns their home (mortgage) — Proud of it. Stresses about it"
+        ],
+        [
+          "Owns home (paid off) — Older or lucky. Not subtle about it"
+        ],
+        [
+          "Rents apartment (urban) — Lease renewed under protest"
+        ],
+        [
+          "Rents apartment (suburban) — Fine. Stable. Forgettable building"
+        ],
+        [
+          "Rents a house — More space, more maintenance, still not theirs"
+        ],
+        [
+          "Rents a room in someone's house — Cheaper. Complicated social geometry"
+        ],
+        [
+          "Lives with family (by choice) — Multigenerational. Cultural or practical"
+        ],
+        [
+          "Lives with family (by necessity) — Moved back. Recent. Embarrassed or grateful"
+        ],
+        [
+          "Couch surfing — In transition. Has a bag. Doesn't say how long"
+        ],
+        [
+          "Lives in an RV or camper (full-time) — By design or by circumstance — very different stories"
+        ],
+        [
+          "Lives in a van — Work van, cargo van, whatever. It's actually dialed in"
+        ],
+        [
+          "Mobile home (owns) — Land situation is complicated"
+        ],
+        [
+          "Mobile home (rents lot) — Park rules. Lot rent. Own the box, rent the ground"
+        ],
+        [
+          "Subsidized housing — Waiting list took years. Stable now. Watching the budget"
+        ],
+        [
+          "Extended stay motel — By the week. TV bolted to wall"
+        ],
+        [
+          "Lives above their business — No commute. Never fully off"
+        ],
+        [
+          "Inherited property — Was someone else's. Now theirs. Costs money to keep"
+        ],
+        [
+          "Temporarily displaced — Between places. Staying somewhere short-term"
+        ],
+        [
+          "Squatting / informal housing — Off the radar. Making it work"
+        ],
+        [
+          "Homeless (situational or chronic) — Has a system. Knows where things are"
+        ]
+      ]
+    },
+    {
+      "sectionId": "21",
+      "section": "Childhood Trauma Generator",
+      "name": "Table A — Action Word",
+      "dice": "d100",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "childhood-trauma",
+      "combineOrder": 1,
+      "entries": [
+        [
+          "Abandoned"
+        ],
+        [
+          "Buried"
+        ],
+        [
+          "Cancelled"
+        ],
+        [
+          "Destroyed"
+        ],
+        [
+          "Disappeared"
+        ],
+        [
+          "Discarded"
+        ],
+        [
+          "Dissolved"
+        ],
+        [
+          "Drained"
+        ],
+        [
+          "Erased"
+        ],
+        [
+          "Evicted"
+        ],
+        [
+          "Expelled"
+        ],
+        [
+          "Fired"
+        ],
+        [
+          "Forgotten"
+        ],
+        [
+          "Forfeited"
+        ],
+        [
+          "Ghosted"
+        ],
+        [
+          "Gutted"
+        ],
+        [
+          "Inherited"
+        ],
+        [
+          "Liquidated"
+        ],
+        [
+          "Mortgaged"
+        ],
+        [
+          "Pawned"
+        ],
+        [
+          "Betrayed"
+        ],
+        [
+          "Bitten"
+        ],
+        [
+          "Broken"
+        ],
+        [
+          "Burned"
+        ],
+        [
+          "Cheated"
+        ],
+        [
+          "Collapsed"
+        ],
+        [
+          "Contaminated"
+        ],
+        [
+          "Corrupted"
+        ],
+        [
+          "Crashed"
+        ],
+        [
+          "Defaced"
+        ],
+        [
+          "Demolished"
+        ],
+        [
+          "Devoured"
+        ],
+        [
+          "Flooded"
+        ],
+        [
+          "Fractured"
+        ],
+        [
+          "Haunted"
+        ],
+        [
+          "Humiliated"
+        ],
+        [
+          "Infected"
+        ],
+        [
+          "Mangled"
+        ],
+        [
+          "Poisoned"
+        ],
+        [
+          "Repossessed"
+        ],
+        [
+          "Blamed"
+        ],
+        [
+          "Compared"
+        ],
+        [
+          "Denied"
+        ],
+        [
+          "Doubted"
+        ],
+        [
+          "Embarrassed"
+        ],
+        [
+          "Excluded"
+        ],
+        [
+          "Exposed"
+        ],
+        [
+          "Gaslit"
+        ],
+        [
+          "Ignored"
+        ],
+        [
+          "Interrogated"
+        ],
+        [
+          "Isolated"
+        ],
+        [
+          "Mocked"
+        ],
+        [
+          "Outlived"
+        ],
+        [
+          "Overshadowed"
+        ],
+        [
+          "Pressured"
+        ],
+        [
+          "Replaced"
+        ],
+        [
+          "Resented"
+        ],
+        [
+          "Shamed"
+        ],
+        [
+          "Silenced"
+        ],
+        [
+          "Weaponized"
+        ],
+        [
+          "Auctioned"
+        ],
+        [
+          "Cloned"
+        ],
+        [
+          "Confiscated"
+        ],
+        [
+          "Consecrated"
+        ],
+        [
+          "Cursed"
+        ],
+        [
+          "Declassified"
+        ],
+        [
+          "Decommissioned"
+        ],
+        [
+          "Defrosted"
+        ],
+        [
+          "Demolished"
+        ],
+        [
+          "Disenchanted"
+        ],
+        [
+          "Disqualified"
+        ],
+        [
+          "Drafted"
+        ],
+        [
+          "Exorcised"
+        ],
+        [
+          "Franchised"
+        ],
+        [
+          "Haunted"
+        ],
+        [
+          "Impersonated"
+        ],
+        [
+          "Mistaken"
+        ],
+        [
+          "Outsourced"
+        ],
+        [
+          "Quarantined"
+        ],
+        [
+          "Recalled"
+        ],
+        [
+          "Autocorrected"
+        ],
+        [
+          "Audited"
+        ],
+        [
+          "Cancelled"
+        ],
+        [
+          "Deplatformed"
+        ],
+        [
+          "Digitized"
+        ],
+        [
+          "Discontinued"
+        ],
+        [
+          "Eaten"
+        ],
+        [
+          "Foreclosed"
+        ],
+        [
+          "Fumigated"
+        ],
+        [
+          "Glitched"
+        ],
+        [
+          "Hacked"
+        ],
+        [
+          "Laundered"
+        ],
+        [
+          "Misdelivered"
+        ],
+        [
+          "Misplaced"
+        ],
+        [
+          "Overbilled"
+        ],
+        [
+          "Reprogrammed"
+        ],
+        [
+          "Rescheduled"
+        ],
+        [
+          "Subleted"
+        ],
+        [
+          "Taxidermied"
+        ],
+        [
+          "Unsubscribed"
+        ]
+      ]
+    },
+    {
+      "sectionId": "21",
+      "section": "Childhood Trauma Generator",
+      "name": "Table B — Noun",
+      "dice": "d100",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "childhood-trauma",
+      "combineOrder": 2,
+      "entries": [
+        [
+          "Aunt"
+        ],
+        [
+          "Brother"
+        ],
+        [
+          "Clown"
+        ],
+        [
+          "Coach"
+        ],
+        [
+          "Cousin"
+        ],
+        [
+          "Dad"
+        ],
+        [
+          "Dog"
+        ],
+        [
+          "Grandma"
+        ],
+        [
+          "Grandpa"
+        ],
+        [
+          "Guardian"
+        ],
+        [
+          "Mentor"
+        ],
+        [
+          "Mom"
+        ],
+        [
+          "Neighbor"
+        ],
+        [
+          "Nanny"
+        ],
+        [
+          "Pastor"
+        ],
+        [
+          "Pet"
+        ],
+        [
+          "Sister"
+        ],
+        [
+          "Stepdad"
+        ],
+        [
+          "Stepmom"
+        ],
+        [
+          "Twin"
+        ],
+        [
+          "Apartment"
+        ],
+        [
+          "Attic"
+        ],
+        [
+          "Barn"
+        ],
+        [
+          "Basement"
+        ],
+        [
+          "Boat"
+        ],
+        [
+          "Bunker"
+        ],
+        [
+          "Cabin"
+        ],
+        [
+          "Farm"
+        ],
+        [
+          "Garden"
+        ],
+        [
+          "Garage"
+        ],
+        [
+          "Greenhouse"
+        ],
+        [
+          "Home"
+        ],
+        [
+          "House"
+        ],
+        [
+          "Lawn"
+        ],
+        [
+          "Mortgage"
+        ],
+        [
+          "Pool"
+        ],
+        [
+          "Shed"
+        ],
+        [
+          "Storage Unit"
+        ],
+        [
+          "Treehouse"
+        ],
+        [
+          "Yard"
+        ],
+        [
+          "Allowance"
+        ],
+        [
+          "Assets"
+        ],
+        [
+          "Business"
+        ],
+        [
+          "College Fund"
+        ],
+        [
+          "Credit Score"
+        ],
+        [
+          "Debt"
+        ],
+        [
+          "Estate"
+        ],
+        [
+          "Future"
+        ],
+        [
+          "Heirlooms"
+        ],
+        [
+          "Identity"
+        ],
+        [
+          "Inheritance"
+        ],
+        [
+          "Insurance"
+        ],
+        [
+          "Legacy"
+        ],
+        [
+          "Pension"
+        ],
+        [
+          "Portfolio"
+        ],
+        [
+          "Savings"
+        ],
+        [
+          "Settlement"
+        ],
+        [
+          "Stocks"
+        ],
+        [
+          "Trust Fund"
+        ],
+        [
+          "Wallet"
+        ],
+        [
+          "Accordion"
+        ],
+        [
+          "Beehive"
+        ],
+        [
+          "Bible"
+        ],
+        [
+          "Bird"
+        ],
+        [
+          "Boat"
+        ],
+        [
+          "Championship Trophy"
+        ],
+        [
+          "Clown Car"
+        ],
+        [
+          "Collection"
+        ],
+        [
+          "Costume"
+        ],
+        [
+          "Dream Journal"
+        ],
+        [
+          "Ferret"
+        ],
+        [
+          "Filing Cabinet"
+        ],
+        [
+          "Hamster"
+        ],
+        [
+          "Imaginary Friend"
+        ],
+        [
+          "Jetski"
+        ],
+        [
+          "Loyalty Card"
+        ],
+        [
+          "Mascot"
+        ],
+        [
+          "Parakeet"
+        ],
+        [
+          "Rolodex"
+        ],
+        [
+          "Taxidermied Bear"
+        ],
+        [
+          "Alibi"
+        ],
+        [
+          "Alibi"
+        ],
+        [
+          "Backstory"
+        ],
+        [
+          "Beliefs"
+        ],
+        [
+          "Brand"
+        ],
+        [
+          "Cheerfulness"
+        ],
+        [
+          "Childhood"
+        ],
+        [
+          "Faith"
+        ],
+        [
+          "Future"
+        ],
+        [
+          "Hobbies"
+        ],
+        [
+          "Innocence"
+        ],
+        [
+          "Instincts"
+        ],
+        [
+          "Last Name"
+        ],
+        [
+          "Memory"
+        ],
+        [
+          "Nickname"
+        ],
+        [
+          "Normal"
+        ],
+        [
+          "Playlist"
+        ],
+        [
+          "Reputation"
+        ],
+        [
+          "Sense of Humor"
+        ],
+        [
+          "Vibe"
         ]
       ]
     }
