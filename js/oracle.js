@@ -1,7 +1,7 @@
 // Oracle tab — themed categories, collapsible cards, roll-from-collapsed.
 // Data lives in oracle-data.js (auto-generated).
 
-import { ORACLE } from "./oracle-data.js";
+import { ORACLE } from "./oracle-data.js?v=20260602";
 
 const HISTORY_LIMIT = 30;
 let history = [];          // {tableName, result, ts}
@@ -207,7 +207,12 @@ export function renderOracle(container) {
         results.push(r.value);
         details.push(r.detail);
       }
-      const combined = results.join(" ");
+      // Pick separator based on result density. Short tokens (name
+      // generators: "Crucible", "Defense", "Inc.") read best space-joined.
+      // Long tokens (dossier entries with " — " notes) need a stronger
+      // separator so the parts don't blur together.
+      const hasLong = results.some(r => (r || "").length > 24);
+      const combined = results.join(hasLong ? " · " : " ");
       lastRollByTableKey.set(groupKey, { result: combined, detail: details.join("  +  ") });
       const lastEl = wrap.querySelector("[data-combine-last]");
       if (lastEl) lastEl.innerHTML = `last: <strong>${esc(combined)}</strong>`;

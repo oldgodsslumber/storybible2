@@ -4173,111 +4173,6 @@ export const ORACLE = {
       ]
     },
     {
-      "sectionId": "13b",
-      "section": "Megacorp Dossier Tables",
-      "name": "Company Culture",
-      "dice": "d20",
-      "diceKind": "single",
-      "columns": 1,
-      "parentRoll": null,
-      "entries": [
-        [
-          "Open-door, flat hierarchy"
-        ]
-      ]
-    },
-    {
-      "sectionId": "13b",
-      "section": "Megacorp Dossier Tables",
-      "name": "Flagship Product Name",
-      "dice": "2d20",
-      "diceKind": "pair",
-      "columns": 2,
-      "parentRoll": null,
-      "entries": [
-        [
-          "(none — product name is just the second word)",
-          "One"
-        ],
-        [
-          "(none — product name is just the second word)",
-          "X"
-        ],
-        [
-          "Pro",
-          "Elite"
-        ],
-        [
-          "Ultra",
-          "Max"
-        ],
-        [
-          "Prime",
-          "Edge"
-        ],
-        [
-          "Apex",
-          "360"
-        ],
-        [
-          "Core",
-          "Series"
-        ],
-        [
-          "Vantage",
-          "Suite"
-        ],
-        [
-          "Nexus",
-          "Platform"
-        ],
-        [
-          "Helix",
-          "Engine"
-        ],
-        [
-          "Vector",
-          "System"
-        ],
-        [
-          "Zenith",
-          "Shield"
-        ],
-        [
-          "Atlas",
-          "Link"
-        ],
-        [
-          "Stratos",
-          "Grid"
-        ],
-        [
-          "Axiom",
-          "Net"
-        ],
-        [
-          "Forge",
-          "Wave"
-        ],
-        [
-          "Cipher",
-          "Pulse"
-        ],
-        [
-          "Quantum",
-          "Flow"
-        ],
-        [
-          "Prism",
-          "Drive"
-        ],
-        [
-          "Arc",
-          "Vault"
-        ]
-      ]
-    },
-    {
       "sectionId": "15b",
       "section": "College Name Generator (2d20)",
       "name": "15b. College Name Generator",
@@ -4379,34 +4274,6 @@ export const ORACLE = {
       "entries": [
         [
           "Associate of Arts (AA)"
-        ]
-      ]
-    },
-    {
-      "sectionId": "15d",
-      "section": "College / University Dossier Tables",
-      "name": "Campus Culture",
-      "dice": "d20",
-      "diceKind": "single",
-      "columns": 1,
-      "parentRoll": null,
-      "entries": [
-        [
-          "Greek life dominates"
-        ]
-      ]
-    },
-    {
-      "sectionId": "15d",
-      "section": "College / University Dossier Tables",
-      "name": "Known For / Academic Focus",
-      "dice": "d20",
-      "diceKind": "single",
-      "columns": 1,
-      "parentRoll": null,
-      "entries": [
-        [
-          "Pre-med pipeline"
         ]
       ]
     },
@@ -21129,6 +20996,819 @@ export const ORACLE = {
         ],
         [
           "Trust"
+        ]
+      ]
+    },
+    {
+      "sectionId": "13b",
+      "section": "Megacorp Dossier Tables",
+      "name": "Company Age",
+      "dice": "d12",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "megacorp-dossier",
+      "combineOrder": 1,
+      "entries": [
+        [
+          "Founded this year — Startup energy. No history. All pitch deck and promise"
+        ],
+        [
+          "2–5 years old — Still proving itself. Leadership hasn't slept in months"
+        ],
+        [
+          "6–10 years old — Past the early chaos. Starting to feel like a real company"
+        ],
+        [
+          "11–20 years old — Established. Has survived at least one near-death moment"
+        ],
+        [
+          "21–30 years old — Old enough to have made enemies. Young enough to be hungry"
+        ],
+        [
+          "31–50 years old — Institution. Has outlasted multiple economic cycles"
+        ],
+        [
+          "51–75 years old — Multiple generations of leadership. Culture has calcified somewhat"
+        ],
+        [
+          "76–100 years old — Centennial approaching. Legacy is a selling point and a weight"
+        ],
+        [
+          "101–150 years old — Pre-war. Has survived things it doesn't talk about"
+        ],
+        [
+          "151–200 years old — Has changed names, sectors, and faces. Core is unrecognizable from founding"
+        ],
+        [
+          "Over 200 years old — Older than most governments. Has a museum wing. Terrifying"
+        ],
+        [
+          "Unknown / deliberately obscured — Founding records are sealed, missing, or falsified. Ask why"
+        ]
+      ]
+    },
+    {
+      "sectionId": "13b",
+      "section": "Megacorp Dossier Tables",
+      "name": "Brand Awareness",
+      "dice": "d10",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "megacorp-dossier",
+      "combineOrder": 2,
+      "entries": [
+        [
+          "Completely unknown — No public presence. Even employees don't mention it"
+        ],
+        [
+          "Known only internally — Exists behind holding companies and NDAs. Invisible by design"
+        ],
+        [
+          "Known to a single industry — Trade press only. Competitors know the name. Nobody else does"
+        ],
+        [
+          "City-level recognition — A local institution. Sponsoring little league. Name on a building"
+        ],
+        [
+          "Regional presence — Multi-city footprint. Regional ad buys. People sort of know it"
+        ],
+        [
+          "National presence — Household name in its home country. Airport ads. Sponsoring sports"
+        ],
+        [
+          "International presence — Operating in multiple countries. Local adaptations of the brand"
+        ],
+        [
+          "Global recognition — The name alone carries weight anywhere in the world"
+        ],
+        [
+          "Ubiquitous / inescapable — Their product is in every country, every pocket, every home"
+        ],
+        [
+          "Officially secret — Exists as a legal entity. Has no public footprint. Intentionally"
+        ]
+      ]
+    },
+    {
+      "sectionId": "13b",
+      "section": "Megacorp Dossier Tables",
+      "name": "Company Culture",
+      "dice": "d20",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "megacorp-dossier",
+      "combineOrder": 3,
+      "entries": [
+        [
+          "Open-door, flat hierarchy — Any employee can reach any exec. Doors are literally never closed"
+        ],
+        [
+          "Radical transparency — Salaries posted internally. Decisions explained publicly. Unsettling to outsiders"
+        ],
+        [
+          "Mission-driven idealism — Employees genuinely believe. The Kool-Aid is strong and organic"
+        ],
+        [
+          "Work-hard, play-hard — Long hours normalized but perks are real. The ping-pong table earns its keep"
+        ],
+        [
+          "Family culture (genuine) — Long tenure, real relationships, people show up to each other's weddings"
+        ],
+        [
+          "Family culture (toxic) — 'We're a family here' used to justify unpaid overtime and loyalty oaths"
+        ],
+        [
+          "Hyper-competitive meritocracy — Stack ranking. Survival of the fittest. Everyone is being evaluated always"
+        ],
+        [
+          "Rigid military hierarchy — Chain of command is sacred. Every decision has exactly one owner"
+        ],
+        [
+          "Fear-based compliance — Nobody says what they think. Dissent is managed out, not heard"
+        ],
+        [
+          "Bureaucratic paralysis — Twelve approval layers. Nothing moves. No one is accountable"
+        ],
+        [
+          "Cult of the founder — CEO worship embedded in onboarding. Founder quotes on the walls"
+        ],
+        [
+          "Quiet desperation — Decent pay. Soul-numbing work. Nobody hates it enough to leave"
+        ],
+        [
+          "Prestige obsession — Brand of the company is the point. Pedigree matters more than output"
+        ],
+        [
+          "Innovation theater — Hackathons and whiteboards everywhere. Very little ships"
+        ],
+        [
+          "Execution-obsessed — No fluff. No off-sites. You either deliver or you're gone"
+        ],
+        [
+          "Deeply siloed — Divisions don't talk. Teams don't share. The left hand never sees the right"
+        ],
+        [
+          "Genuinely supportive — Mental health days are real. Managers are trained. It works somehow"
+        ],
+        [
+          "Old boys' club — Informal power runs through golf games and after-hours dinners"
+        ],
+        [
+          "Reform in progress — New leadership trying to fix old culture. War between old and new guard"
+        ],
+        [
+          "Nobody knows what the culture is — Acquired so many times the identity is completely scrambled"
+        ]
+      ]
+    },
+    {
+      "sectionId": "13b",
+      "section": "Megacorp Dossier Tables",
+      "name": "Industry Sector",
+      "dice": "d20",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "megacorp-dossier",
+      "combineOrder": 4,
+      "entries": [
+        [
+          "Defense & Military Contracting — Weapons systems, surveillance tech, logistics for state actors"
+        ],
+        [
+          "Pharmaceuticals & Biotech — Drug development, clinical trials, patent warfare"
+        ],
+        [
+          "Energy (fossil fuels) — Oil, gas, pipeline infrastructure, refining"
+        ],
+        [
+          "Energy (renewables & tech) — Solar, wind, grid infrastructure, storage"
+        ],
+        [
+          "Financial Services & Insurance — Banking, asset management, underwriting, derivatives"
+        ],
+        [
+          "Technology & Software — Enterprise software, cloud platforms, SaaS products"
+        ],
+        [
+          "Consumer Electronics & Hardware — Devices, chips, components, wearables"
+        ],
+        [
+          "Telecommunications — Broadband, cellular, satellite, undersea cable"
+        ],
+        [
+          "Agriculture & Food Production — Industrial farming, food processing, supply chains"
+        ],
+        [
+          "Logistics & Supply Chain — Freight, warehousing, last-mile delivery, ports"
+        ],
+        [
+          "Media & Entertainment — Studios, streaming, publishing, live events"
+        ],
+        [
+          "Retail & E-Commerce — Direct-to-consumer, marketplace, private label"
+        ],
+        [
+          "Healthcare & Hospital Systems — Hospital networks, diagnostics, insurance administration"
+        ],
+        [
+          "Aerospace & Aviation — Commercial aircraft, satellites, launch systems"
+        ],
+        [
+          "Real Estate & Infrastructure — Commercial property, city development, utilities"
+        ],
+        [
+          "Private Security & Intelligence — Contracted law enforcement, corporate espionage, risk consulting"
+        ],
+        [
+          "Mining & Natural Resources — Extraction, processing, rare earth materials"
+        ],
+        [
+          "Chemicals & Materials — Industrial chemicals, synthetics, specialty materials"
+        ],
+        [
+          "Data & Analytics — Data brokerage, surveillance tech, AI training data"
+        ],
+        [
+          "Officially diversified (actually unclear) — Publicly in everything. Privately focused on something they don't discuss"
+        ]
+      ]
+    },
+    {
+      "sectionId": "13b",
+      "section": "Megacorp Dossier Tables",
+      "name": "Security Competency",
+      "dice": "d10",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "megacorp-dossier",
+      "combineOrder": 5,
+      "entries": [
+        [
+          "Virtually none — Visitor log is a paper sign-in sheet. Wi-Fi password is on a sticky note"
+        ],
+        [
+          "Theater only — Cameras everywhere. No one monitors them. Badge readers that always work... mostly"
+        ],
+        [
+          "Basic compliance — Meets minimum legal standards. Would not survive a determined teenager"
+        ],
+        [
+          "Vendor-managed — Outsourced to a security firm. Adequate during business hours"
+        ],
+        [
+          "Functional but patchy — Good in some areas, embarrassing gaps in others. Nobody has audited the gaps"
+        ],
+        [
+          "Competent standard — Professional team, real protocols, decent response times. Nothing special"
+        ],
+        [
+          "Above average — Penetration tested regularly. Incidents are documented and learned from"
+        ],
+        [
+          "Serious operation — In-house SOC. Physical and cyber integrated. Employees are briefed and tested"
+        ],
+        [
+          "Near-military grade — Former government personnel. Layered redundant systems. Background checks go back 20 years"
+        ],
+        [
+          "Classified-level — You don't know what they have because it works. Nobody who's tried has reported back"
+        ]
+      ]
+    },
+    {
+      "sectionId": "13b",
+      "section": "Megacorp Dossier Tables",
+      "name": "Product Quality",
+      "dice": "d12",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "megacorp-dossier",
+      "combineOrder": 6,
+      "entries": [
+        [
+          "Outright fraud — Does not do what it claims. Leadership knows. Lawyers are managing it"
+        ],
+        [
+          "Functionally broken — Ships with critical flaws. Patches promised quarterly. Community workarounds required"
+        ],
+        [
+          "Works, barely — Technically functional if used exactly as intended in ideal conditions"
+        ],
+        [
+          "Below expectations — Overpromised and underdelivered. Reviews are mixed-to-negative"
+        ],
+        [
+          "Meets spec, nothing more — Does exactly what the brochure says. No more. No joy in using it"
+        ],
+        [
+          "Adequate — Fine. It works. You won't hate it. You won't remember it either"
+        ],
+        [
+          "Solid performer — Reliable. Does what it says. Minor gripes. Recommended by professionals"
+        ],
+        [
+          "Better than competitors — Not perfect but clearly the best available option in its class"
+        ],
+        [
+          "Genuinely excellent — Category-leading. Earns loyalty. Professionals swear by it"
+        ],
+        [
+          "Industry-defining — Changed how the sector works. Competitors are still catching up"
+        ],
+        [
+          "Transformational — Redefined what was thought possible. A generation milestone"
+        ],
+        [
+          "Classified / unknown — Not available to the public. Capabilities not officially confirmed"
+        ]
+      ]
+    },
+    {
+      "sectionId": "13b",
+      "section": "Megacorp Dossier Tables",
+      "name": "CEO Behavior",
+      "dice": "d20",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "megacorp-dossier",
+      "combineOrder": 7,
+      "entries": [
+        [
+          "Never photographed — No confirmed public image. Rumored to be multiple people, or one person living off-grid"
+        ],
+        [
+          "Obsessed with legacy — Every decision filtered through how it will look in a biography they're already writing"
+        ],
+        [
+          "Actively hostile to press — Sues journalists. Has a blacklist. PR team preemptively kills stories"
+        ],
+        [
+          "Posts manifestos online — Long unedited threads at 2am. Board considers this a risk. Employees consider it gospel"
+        ],
+        [
+          "Purges executives on a cycle — New C-suite every 18 months. Loyalty window is short. Everyone knows"
+        ],
+        [
+          "Lives in the office — Has a bed, a bathroom, a fridge. Has not gone home in the traditional sense in years"
+        ],
+        [
+          "Celebrity worship adjacent — Appears at red carpets, product launches feel like concerts, has a fan base"
+        ],
+        [
+          "Doomsday prepper — Bunker. Remote land. Satellite comms. The company is funding the exit plan"
+        ],
+        [
+          "Micro-manages everything — Approves font choices. Reviews every press release. Executives are well-paid assistants"
+        ],
+        [
+          "Completely unreachable — Delegates everything. Nobody has spoken to them directly in months. Maybe years"
+        ],
+        [
+          "Dietary extremist — Fasting protocols, IV drips, biological age optimization. Runs meetings fasted"
+        ],
+        [
+          "Has a spiritual advisor — Not a therapist. A spiritual advisor. Attends board meetings. Has a title"
+        ],
+        [
+          "Public feud in progress — Ongoing war with another exec, politician, or journalist. Very online. Very petty"
+        ],
+        [
+          "Believed to be a front — Public face for someone or something else. Confirmed by no one. Suspected by many"
+        ],
+        [
+          "Keeps exotic animals — On the campus. In the lobby. In their home. Legal status varies by jurisdiction"
+        ],
+        [
+          "Previously someone else — Former identity obscured. The bio on the website does not match public records"
+        ],
+        [
+          "Runs the company like a game — Points systems, leaderboards, competitive rankings for employees. Not metaphorical"
+        ],
+        [
+          "Has a compound — It's called a 'campus.' It's a compound. Security does not work for the company"
+        ],
+        [
+          "Recently had a breakdown — Public, documented, or rumored. Currently 'focused on wellness.' Company is rudderless"
+        ],
+        [
+          "Apparently completely normal — Disturbingly ordinary for someone in their position. This is more unsettling, not less"
+        ]
+      ]
+    },
+    {
+      "sectionId": "15d",
+      "section": "College / University Dossier Tables",
+      "name": "Institution Age",
+      "dice": "d10",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "college-dossier",
+      "combineOrder": 1,
+      "entries": [
+        [
+          "Founded in the last 10 years — Brand new. Provisional accreditation. Everything smells like fresh drywall"
+        ],
+        [
+          "11–25 years old — Post-internet era. First generation of alumni now in the workforce"
+        ],
+        [
+          "26–50 years old — Established. Survived one or two budget crises. Has a real endowment now"
+        ],
+        [
+          "51–100 years old — Mid-century founding. Built during a boom. Some buildings are showing their age"
+        ],
+        [
+          "101–150 years old — Pre-WWII. Has a bell tower. Alumni magazine has been running since 1952"
+        ],
+        [
+          "151–200 years old — Civil War era or earlier. Founding mythology is a whole thing on campus tours"
+        ],
+        [
+          "Over 200 years old — Pre-Revolution. The original charter is in a climate-controlled case in the library"
+        ],
+        [
+          "Founded by a religious order — Date varies, but the mission statement still has God in it somewhere"
+        ],
+        [
+          "Repurposed from another institution — Was a seminary, a military base, or a factory school. History is complicated"
+        ],
+        [
+          "Date of founding is disputed — Two factions argue about it. One has a plaque. The other has a lawsuit"
+        ]
+      ]
+    },
+    {
+      "sectionId": "15d",
+      "section": "College / University Dossier Tables",
+      "name": "Reputation Level",
+      "dice": "d10",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "college-dossier",
+      "combineOrder": 2,
+      "entries": [
+        [
+          "Unknown outside the zip code — Nobody's heard of it. Students say the city name, not the school name"
+        ],
+        [
+          "Local name recognition only — The community knows it. Employers in the area give it credit"
+        ],
+        [
+          "Regional respect — Feeder school for regional employers. Solid within a 4-state radius"
+        ],
+        [
+          "National presence in one field — Unknown overall, but the nursing program or law school is nationally ranked"
+        ],
+        [
+          "Solid mid-tier national school — Listed in rankings. Parents recognize the name. Not a stretch, not a trophy"
+        ],
+        [
+          "Respected national institution — Strong brand. Alumni network opens doors. Selectivity is real"
+        ],
+        [
+          "Prestigious / selective — Rejection rate is the story. Name carries weight in any room in the country"
+        ],
+        [
+          "Internationally recognized — Foreign students apply. Global rankings. Research cited worldwide"
+        ],
+        [
+          "Elite / Ivy-adjacent — Legacy admissions. Enormous endowment. Old money runs the board of trustees"
+        ],
+        [
+          "Infamous for the wrong reasons — Famous, but because of a scandal, a lawsuit, a documentary, or a meme"
+        ]
+      ]
+    },
+    {
+      "sectionId": "15d",
+      "section": "College / University Dossier Tables",
+      "name": "Campus Culture",
+      "dice": "d20",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "college-dossier",
+      "combineOrder": 3,
+      "entries": [
+        [
+          "Greek life dominates — Fraternities and sororities control the social calendar. Rushing is survival"
+        ],
+        [
+          "Deeply political — Every wall has a poster. Every conversation becomes a debate. Faculty take sides"
+        ],
+        [
+          "Pre-professional tunnel vision — Everyone is networking. Clubs exist for LinkedIn. Passion is for the weak"
+        ],
+        [
+          "Arts and identity-driven — Theater kids run the place. The quad has murals. Everyone has a manifesto"
+        ],
+        [
+          "STEM monoculture — Engineering buildings are new. Humanities buildings are crumbling. Enrollment tells the story"
+        ],
+        [
+          "Party school reputation — Justified or not, the school is known for it. Admissions doesn't advertise it"
+        ],
+        [
+          "Commuter school reality — Most students aren't there for the experience. They're there for the credential"
+        ],
+        [
+          "Strong athletic culture — The team is the identity. Game days are civic events. Coaches make more than deans"
+        ],
+        [
+          "Intense academic pressure — Grade curves that destroy friendships. Study rooms booked 24 hours in advance"
+        ],
+        [
+          "Religious campus culture — Chapel attendance is encouraged or required. The honor code has teeth"
+        ],
+        [
+          "Activist tradition — Long history of protests. Administration has learned to manage them. Mostly"
+        ],
+        [
+          "Tight-knit and insular — Everyone knows everyone. Gossip travels fast. Alumni never really leave"
+        ],
+        [
+          "Deeply divided — Town vs. gown, program vs. program, old guard vs. new. The faculty senate is at war"
+        ],
+        [
+          "Mellow and disconnected — Students show up, get the degree, leave. No one's that invested"
+        ],
+        [
+          "Military / ROTC presence — Discipline is visible on campus. Veterans are a significant demographic"
+        ],
+        [
+          "International student majority — Cafeteria food reflects it. Social circles are stratified by home country"
+        ],
+        [
+          "Online-heavy or hybrid — Half the students have never set foot on campus. Culture is mostly Discord"
+        ],
+        [
+          "Prestigious but miserable — Rankings are real. Happiness is not. Burnout is the unofficial mascot"
+        ],
+        [
+          "In the middle of a reform era — New president. New priorities. Half the faculty are furious. Half are relieved"
+        ],
+        [
+          "Nobody agrees on what it is — Ask 10 students. Get 10 descriptions. The brand team is working on it"
+        ]
+      ]
+    },
+    {
+      "sectionId": "15d",
+      "section": "College / University Dossier Tables",
+      "name": "Known For / Academic Focus",
+      "dice": "d20",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "college-dossier",
+      "combineOrder": 4,
+      "entries": [
+        [
+          "Pre-med pipeline — MCAT prep infrastructure. 3.9 GPA is a floor, not a ceiling. Cutthroat and funded"
+        ],
+        [
+          "Law school feeder — Mock trial teams. Political science is the most popular major. Everyone wants a clerkship"
+        ],
+        [
+          "Business / finance track — Recruiters from banks and consulting firms are on campus every fall"
+        ],
+        [
+          "Engineering excellence — Research contracts. Industry partnerships. The buildings have corporate names"
+        ],
+        [
+          "Fine arts & performance — Conservatory energy. Performances are the social events. Faculty are working artists"
+        ],
+        [
+          "Agriculture & land-grant legacy — Deep rural ties. Extension programs. FFA alumni on the board of trustees"
+        ],
+        [
+          "Education & teacher training — High percentage of graduates go into classrooms. State-contracted enrollment"
+        ],
+        [
+          "Nursing & allied health — Clinical partnerships with regional hospitals. High employment rate post-graduation"
+        ],
+        [
+          "Criminal justice & public safety — Pipeline to law enforcement, corrections, and federal agencies"
+        ],
+        [
+          "Theology & religious studies — Denominational affiliation shapes the curriculum. Chapel is not optional"
+        ],
+        [
+          "Social work & human services — Students are here because they want to fix something. Faculty have seen things"
+        ],
+        [
+          "Research university (general) — Grant money. PhD programs. Professors who resent teaching undergrads"
+        ],
+        [
+          "Technical & trade certification — Associates and certificates. Job placement is the metric that matters"
+        ],
+        [
+          "Liberal arts breadth — No declared major pressure until junior year. Lots of philosophy double majors"
+        ],
+        [
+          "Journalism & communications — Student newspaper is actually good. Alumni are in newsrooms everywhere"
+        ],
+        [
+          "Computer science & data — Tech recruiting presence. Hackathons every semester. Hoodies are a dress code"
+        ],
+        [
+          "Environmental & sustainability focus — Solar panels. Composting infrastructure. Curriculum built around the planet"
+        ],
+        [
+          "Military science & national security — ROTC prominent. Relationships with defense contractors. Some programs are quiet"
+        ],
+        [
+          "Film, media & game design — Production equipment everywhere. Student films are screened locally"
+        ],
+        [
+          "Unclear / rebranding constantly — Has changed its focus three times in ten years. Current mission statement is vague"
+        ]
+      ]
+    },
+    {
+      "sectionId": "15d",
+      "section": "College / University Dossier Tables",
+      "name": "Financial Health",
+      "dice": "d10",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "college-dossier",
+      "combineOrder": 5,
+      "entries": [
+        [
+          "Functionally insolvent — Payroll is tight. Programs are being cut. Accreditation is under review"
+        ],
+        [
+          "Chronic deficit — Running in the red most years. Dependent on enrollment to make up gaps"
+        ],
+        [
+          "Survival mode — Barely breaking even. Facilities are deferred maintenance. Staff morale is low"
+        ],
+        [
+          "Stable but thin — Not in crisis, but no cushion. One bad enrollment year is a real threat"
+        ],
+        [
+          "Modest and managed — Bills paid. Small reserve. Responsible stewardship. Nothing flashy"
+        ],
+        [
+          "Healthy endowment — Can weather downturns. Scholarships are funded. Faculty retention is real"
+        ],
+        [
+          "Well-resourced — New buildings going up. Research funded. Competitive salaries. Donations are strong"
+        ],
+        [
+          "Wealthy institution — Top 100 endowment. Money is not the constraint. Politics is"
+        ],
+        [
+          "Extraordinarily wealthy — Endowment income alone could run the school indefinitely. Tuition is optional"
+        ],
+        [
+          "Financial situation is opaque — Numbers are available but hard to interpret. Something doesn't add up"
+        ]
+      ]
+    },
+    {
+      "sectionId": "15d",
+      "section": "College / University Dossier Tables",
+      "name": "Campus Security",
+      "dice": "d8",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "college-dossier",
+      "combineOrder": 6,
+      "entries": [
+        [
+          "Effectively none — Campus safety is one unarmed guard who mostly gives parking tickets"
+        ],
+        [
+          "Symbolic presence — Blue light phones from 1994. Officers wave at people. No one is deterred"
+        ],
+        [
+          "Basic and reactive — They show up after something happens. Response time is optimistic"
+        ],
+        [
+          "Adequate for the setting — Standard college campus operation. Incidents are logged and mostly handled"
+        ],
+        [
+          "Professionally run — Real training. Coordination with local PD. Emergency plans that have been tested"
+        ],
+        [
+          "Over-resourced for the campus — More staff than needed. Cameras on everything. Faculty have opinions about this"
+        ],
+        [
+          "Militarized — Armed officers. Vehicle barriers. ID checkpoints. Students have mixed feelings"
+        ],
+        [
+          "The campus has something going on — Security is a topic of active campus debate. Something happened. Ask around"
+        ]
+      ]
+    },
+    {
+      "sectionId": "15d",
+      "section": "College / University Dossier Tables",
+      "name": "Notable Alumni Type",
+      "dice": "d12",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "college-dossier",
+      "combineOrder": 7,
+      "entries": [
+        [
+          "Prominent politicians — Multiple governors, senators, or a president. The political science building has portraits"
+        ],
+        [
+          "Corporate executives — CEO pipeline. Fortune 500 boards have a cluster from this school"
+        ],
+        [
+          "Acclaimed artists or performers — A musician, actor, or filmmaker everyone knows. The arts building is named after them"
+        ],
+        [
+          "Athletes — Multiple pros. The stadium was renovated because of their donations"
+        ],
+        [
+          "Military leaders — Generals, admirals, decorated officers. The ROTC program gets extra funding"
+        ],
+        [
+          "Controversial public figures — Famous for the wrong reasons. Alumni association quietly distances itself"
+        ],
+        [
+          "Journalists and media figures — Names in major mastheads. The j-school fundraises off of them"
+        ],
+        [
+          "Scientists and researchers — Nobel mentions. Patents. Discoveries made here. Lab named after one of them"
+        ],
+        [
+          "Criminals (notable) — White-collar, organized, or otherwise. The school doesn't advertise it"
+        ],
+        [
+          "Religious leaders — Bishops, pastors, activists. The institution shaped them and claims credit"
+        ],
+        [
+          "Social movement figures — Organizers, advocates, historic protesters. Complicated relationship with admin"
+        ],
+        [
+          "No one notable yet — Young school, unlucky school, or famously ordinary. Alumni are regular people"
+        ]
+      ]
+    },
+    {
+      "sectionId": "15d",
+      "section": "College / University Dossier Tables",
+      "name": "President / Chancellor",
+      "dice": "d12",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "college-dossier",
+      "combineOrder": 8,
+      "entries": [
+        [
+          "Invisible — Nobody has seen them outside a ribbon cutting. Staff don't recognize them in the hall"
+        ],
+        [
+          "Beloved and effective — Rare. Morale is genuinely good. Faculty respect is real. Probably leaving soon"
+        ],
+        [
+          "Beloved but ineffective — Everyone likes them. Nothing gets done. The provost runs the school"
+        ],
+        [
+          "Effective but despised — Results are real. Methods are brutal. Faculty senate passes resolutions quarterly"
+        ],
+        [
+          "Hired to cut budgets — Their job is reduction. Everyone knows it. They're not pretending otherwise"
+        ],
+        [
+          "Visionary in their own mind — Lots of speeches about transformation. Implementation is someone else's problem"
+        ],
+        [
+          "Under investigation — Nature of the investigation varies. HR, financial, or something worse"
+        ],
+        [
+          "Former corporate executive — Runs it like a business. Faculty hate this framing. Board loves it"
+        ],
+        [
+          "Long-tenured and entrenched — Has been there 20+ years. Institution has calcified around their preferences"
+        ],
+        [
+          "Recently installed, already embattled — Six months in. Two no-confidence votes pending. Origin story is complicated"
+        ],
+        [
+          "Public intellectual — Writes op-eds. Does podcasts. Visible nationally. Campus runs itself, apparently"
+        ],
+        [
+          "The board actually runs the school — President is a figurehead. Real decisions happen in closed sessions elsewhere"
         ]
       ]
     }

@@ -17,7 +17,7 @@ import {
   suggestTraits, applyTraitSuggestions, openTraitSuggestModal,
   openSceneProposalModal
 } from "./review.js";
-import { renderOracle } from "./oracle.js";
+import { renderOracle } from "./oracle.js?v=20260602";
 import { openStorySettingsModal, getColumnsForProject, defaultColumnId } from "./story-settings.js";
 import { provideExtractionStateRef } from "./extraction.js";
 import { mountLlmConfigBanner } from "./settings.js?v=20260530";
