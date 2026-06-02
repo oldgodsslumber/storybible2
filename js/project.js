@@ -1014,6 +1014,16 @@ function rebuildGraphElements() {
     console.warn("[graph] rebuildGraphElements: state.cy is not initialized yet");
     return;
   }
+
+  // Capture current positions of existing nodes BEFORE we remove anything.
+  // We'll re-apply them when nodes are re-added so the user's hand-arranged
+  // graph doesn't shuffle every time they add a card from a note.
+  const existingPositions = new Map();
+  state.cy.nodes().forEach(n => {
+    existingPositions.set(n.id(), { ...n.position() });
+  });
+  const isFirstRender = existingPositions.size === 0;
+
   state.cy.elements().remove();
   const nodes = [];
   for (const card of state.cards.values()) {
@@ -1021,14 +1031,19 @@ function rebuildGraphElements() {
     if (!CANVAS_CARD_TYPES.has(card.type)) continue;
     const f = card.fields || {};
     const stale = !!(f.storyRoleSummaryStale || f.ragSummaryStale || f.summaryStale);
-    nodes.push({
+    const node = {
       data: {
         id: card.id,
         label: (stale ? "⚠ " : "") + (card.title || `(untitled ${card.type})`),
         type: card.type,
         stale: stale ? "1" : "0"
       }
-    });
+    };
+    // If this node existed before, preset its position so it stays put.
+    if (existingPositions.has(card.id)) {
+      node.position = existingPositions.get(card.id);
+    }
+    nodes.push(node);
   }
   const edges = [];
   const activeIds = new Set(nodes.map(n => n.data.id));
@@ -1043,10 +1058,13 @@ function rebuildGraphElements() {
       }
     });
   }
+  const newNodeIds = nodes.filter(n => !existingPositions.has(n.data.id)).map(n => n.data.id);
   const container = state.cy.container();
   console.log("[graph] rebuilding", {
     nodes: nodes.length,
     edges: edges.length,
+    newNodes: newNodeIds.length,
+    isFirstRender,
     containerVisible: !els.graphView.classList.contains("hidden"),
     containerSize: container ? { w: container.clientWidth, h: container.clientHeight } : null
   });
@@ -1054,14 +1072,52 @@ function rebuildGraphElements() {
 
   // Defer layout to next animation frame so the browser has finished any
   // pending DOM reflow (modal close, view switch, etc.) before Cytoscape
-  // measures the container. Without this, cy.resize() can see stale 0x0
-  // dimensions and the layout places nodes at (0,0).
+  // measures the container.
   requestAnimationFrame(() => {
     state.cy.resize();
-    const layout = chooseLayout(nodes.length, edges.length);
-    console.log("[graph] running layout", layout.name);
-    state.cy.layout(layout).run();
-    state.cy.fit(undefined, 40);
+
+    if (isFirstRender) {
+      // No prior layout — run a fresh auto-layout and fit to view.
+      const layout = chooseLayout(nodes.length, edges.length);
+      console.log("[graph] first-render layout:", layout.name);
+      state.cy.layout(layout).run();
+      state.cy.fit(undefined, 40);
+      return;
+    }
+
+    if (newNodeIds.length === 0) {
+      // Pure relabel / restyle — no nodes added, no nodes moved.
+      // Don't call fit(); the user's pan/zoom is intentional.
+      console.log("[graph] no new nodes — skipping layout");
+      return;
+    }
+
+    // Some existing, some new: keep existing positions, place new ones near
+    // the current viewport center with a small spiral spacing so they don't
+    // overlap each other or the existing graph too aggressively.
+    placeNewNodesNearViewport(newNodeIds);
+    console.log("[graph] placed", newNodeIds.length, "new node(s) near viewport center");
+  });
+}
+
+// Position new nodes in a small spiral around the current viewport center
+// so they're immediately visible to the user without disturbing the
+// hand-arranged positions of existing nodes.
+function placeNewNodesNearViewport(newIds) {
+  if (!state.cy || newIds.length === 0) return;
+  const ext = state.cy.extent(); // graph coords currently visible
+  const cx = (ext.x1 + ext.x2) / 2;
+  const cy = (ext.y1 + ext.y2) / 2;
+  newIds.forEach((id, i) => {
+    const node = state.cy.getElementById(id);
+    if (!node || !node.length) return;
+    // Spiral: angle grows with i, radius grows slowly so we don't fly off-screen
+    const angle = i * 0.9;
+    const radius = 80 + i * 28;
+    node.position({
+      x: cx + Math.cos(angle) * radius,
+      y: cy + Math.sin(angle) * radius
+    });
   });
 }
 
