@@ -1,7 +1,7 @@
 // Oracle tab — themed categories, collapsible cards, roll-from-collapsed.
 // Data lives in oracle-data.js (auto-generated).
 
-import { ORACLE } from "./oracle-data.js?v=20260602b";
+import { ORACLE } from "./oracle-data.js?v=20260602c";
 
 const HISTORY_LIMIT = 30;
 let history = [];          // {tableName, result, ts}
@@ -206,24 +206,53 @@ export function renderOracle(container) {
     wrap.querySelector(".oracle-combine-roll").addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const results = [];
+      const rolls = [];
       const details = [];
       for (const t of groupTables) {
         const r = rollSilently(t);
-        results.push(r.value);
+        rolls.push({ label: t.name, value: r.value });
         details.push(r.detail);
       }
-      // Pick separator based on result density. Short tokens (name
-      // generators: "Crucible", "Defense", "Inc.") read best space-joined.
-      // Long tokens (dossier entries with " — " notes) need a stronger
-      // separator so the parts don't blur together.
-      const hasLong = results.some(r => (r || "").length > 24);
-      const combined = results.join(hasLong ? " · " : " ");
+
+      // Dossier-style groups (Megacorp Dossier, College Dossier) have many
+      // sub-tables with long item+notes entries. Concatenating them all
+      // into a single line is unreadable. Detect dossier groups by either
+      // an explicit "-dossier" suffix or by long average entry length, and
+      // render as a multi-line profile with one label-prefixed line per
+      // sub-table.
+      const isDossier = /-dossier$/i.test(groupId)
+        || (rolls.length >= 4 && rolls.every(r => (r.value || "").length > 24));
+
+      let combined, htmlPreview;
+      if (isDossier) {
+        const linesPlain = rolls.map(r => `${r.label}: ${r.value}`);
+        combined = linesPlain.join("\n");
+        htmlPreview = rolls.map(r =>
+          `<div class="oracle-dossier-line"><span class="oracle-dossier-label">${esc(r.label)}:</span> ${esc(r.value)}</div>`
+        ).join("");
+      } else {
+        // Name-generator groups (Megacorp Name, News Network, Small Business,
+        // Childhood Trauma, Villain Motivation) — concatenate with a good
+        // separator based on token length.
+        const values = rolls.map(r => r.value);
+        const hasLong = values.some(v => (v || "").length > 24);
+        combined = values.join(hasLong ? " · " : " ");
+        htmlPreview = esc(combined);
+      }
+
       lastRollByTableKey.set(groupKey, { result: combined, detail: details.join("  +  ") });
       const lastEl = wrap.querySelector("[data-combine-last]");
-      if (lastEl) lastEl.innerHTML = `last: <strong>${esc(combined)}</strong>`;
+      if (lastEl) {
+        lastEl.innerHTML = isDossier
+          ? `<div class="oracle-dossier-result"><div class="muted small">last roll:</div>${htmlPreview}</div>`
+          : `last: <strong>${htmlPreview}</strong>`;
+      }
       recordRoll(groupName, groupName, combined, details.join("  +  "));
-      showFloatingResult(`${groupName}: ${combined}`);
+      // Floating toast: show first line for dossiers (otherwise it'd be huge)
+      const toastText = isDossier
+        ? `${groupName} — ${rolls.length} fields rolled (see card or news feed)`
+        : `${groupName}: ${combined}`;
+      showFloatingResult(toastText);
     });
     return wrap;
   }
