@@ -47,6 +47,12 @@ const CATEGORIES = [
     match: (t) => ["7", "7b", "10", "10b", "10c"].includes(t.sectionId)
   },
   {
+    id: "religion-community",
+    title: "Religion & Community",
+    description: "Church and congregation name generators.",
+    match: (t) => ["11"].includes(t.sectionId)
+  },
+  {
     id: "media",
     title: "Media Names",
     description: "Newspapers and news networks.",
@@ -67,8 +73,8 @@ const CATEGORIES = [
   {
     id: "places",
     title: "Places & Locations",
-    description: "Location types and atmospheric venue generators.",
-    match: (t) => t.sectionId === "2"
+    description: "Location types by region/density, plus street name generator.",
+    match: (t) => ["2", "9"].includes(t.sectionId)
   },
   {
     id: "backstory",

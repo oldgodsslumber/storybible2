@@ -4264,48 +4264,6 @@ export const ORACLE = {
       ]
     },
     {
-      "sectionId": "22",
-      "section": "Villain Motivation Generator (d100 + d100)",
-      "name": "Table A — Motivation Word",
-      "dice": "d100",
-      "diceKind": "single",
-      "columns": 1,
-      "parentRoll": null,
-      "entries": [
-        [
-          "Acquire"
-        ]
-      ]
-    },
-    {
-      "sectionId": "22",
-      "section": "Villain Motivation Generator (d100 + d100)",
-      "name": "Table B — Subject",
-      "dice": "d100",
-      "diceKind": "single",
-      "columns": 1,
-      "parentRoll": null,
-      "entries": [
-        [
-          "A Rival"
-        ]
-      ]
-    },
-    {
-      "sectionId": "22",
-      "section": "Villain Motivation Generator (d100 + d100)",
-      "name": "Shape Reference Table",
-      "dice": "d10",
-      "diceKind": "single",
-      "columns": 1,
-      "parentRoll": null,
-      "entries": [
-        [
-          "I-Tetromino (1×4)"
-        ]
-      ]
-    },
-    {
       "sectionId": "4",
       "section": "Character Names by Country",
       "name": "United States — First Names",
@@ -22511,6 +22469,1128 @@ export const ORACLE = {
         ],
         [
           "Vibe"
+        ]
+      ]
+    },
+    {
+      "sectionId": "3",
+      "section": "Criminal Record Severity",
+      "name": "Criminal Record Severity",
+      "dice": "d10",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "entries": [
+        [
+          "Parking / traffic violation — e.g. Parking ticket, speeding under 15mph over, expired registration"
+        ],
+        [
+          "Minor ordinance violation — e.g. Public drinking, noise complaint, littering, jaywalking"
+        ],
+        [
+          "Minor civil infraction — e.g. Trespassing (no damage), disorderly conduct, minor in possession of alcohol"
+        ],
+        [
+          "Class C misdemeanor — e.g. Petty theft under $100, possession of marijuana (small amount, jurisdiction-dependent), minor vandalism"
+        ],
+        [
+          "Class B misdemeanor — e.g. Shoplifting, simple assault (no injury), public intoxication with incident, reckless driving"
+        ],
+        [
+          "Class A misdemeanor — e.g. DUI (first offense), theft $100–$1,000, criminal mischief, domestic disturbance (no injury)"
+        ],
+        [
+          "Low-level felony (F3/F4) — e.g. Felony DUI, theft $1,000–$10,000, drug possession (intent), check fraud, breaking & entering (unoccupied)"
+        ],
+        [
+          "Mid-level felony (F2) — e.g. Aggravated assault, burglary (occupied), large-scale fraud, drug distribution, vehicular homicide"
+        ],
+        [
+          "High felony (F1) — e.g. Armed robbery, arson, kidnapping, sexual assault, large-scale narcotics trafficking, manslaughter"
+        ],
+        [
+          "Capital offense — e.g. First-degree murder, terrorism, mass violence, federal-level organized crime, crimes against children"
+        ]
+      ]
+    },
+    {
+      "sectionId": "9",
+      "section": "Street Name Generator",
+      "name": "Street Name",
+      "dice": "2d20",
+      "diceKind": "pair",
+      "columns": 2,
+      "parentRoll": null,
+      "entries": [
+        [
+          "Hollow",
+          "Road"
+        ],
+        [
+          "Shady",
+          "Lane"
+        ],
+        [
+          "Old Mill",
+          "Drive"
+        ],
+        [
+          "Broken",
+          "Court"
+        ],
+        [
+          "Rolling",
+          "Way"
+        ],
+        [
+          "Copper",
+          "Street"
+        ],
+        [
+          "Dusty",
+          "Avenue"
+        ],
+        [
+          "Lonesome",
+          "Boulevard"
+        ],
+        [
+          "Whispering",
+          "Trail"
+        ],
+        [
+          "Crooked",
+          "Run"
+        ],
+        [
+          "Silver",
+          "Circle"
+        ],
+        [
+          "Burnt",
+          "Place"
+        ],
+        [
+          "Stone",
+          "Terrace"
+        ],
+        [
+          "Cold Water",
+          "Pass"
+        ],
+        [
+          "Dogwood",
+          "Loop"
+        ],
+        [
+          "Harvest",
+          "Ridge"
+        ],
+        [
+          "Lost Creek",
+          "Hollow"
+        ],
+        [
+          "Sunken",
+          "Crossing"
+        ],
+        [
+          "Ridgeline",
+          "Pike"
+        ],
+        [
+          "Timber",
+          "Spur"
+        ]
+      ]
+    },
+    {
+      "sectionId": "10c",
+      "section": "Pretentious Drink Name Generator",
+      "name": "Pretentious Drink Name",
+      "dice": "2d20",
+      "diceKind": "pair",
+      "columns": 2,
+      "parentRoll": null,
+      "entries": [
+        [
+          "Smoked",
+          "Negroni"
+        ],
+        [
+          "Deconstructed",
+          "Sour"
+        ],
+        [
+          "Foraged",
+          "Fizz"
+        ],
+        [
+          "Clarified",
+          "Smash"
+        ],
+        [
+          "Fermented",
+          "Collins"
+        ],
+        [
+          "Oxidized",
+          "Mule"
+        ],
+        [
+          "Washed",
+          "Spritz"
+        ],
+        [
+          "Infused",
+          "Julep"
+        ],
+        [
+          "Pressed",
+          "Bramble"
+        ],
+        [
+          "Steeped",
+          "Daiquiri"
+        ],
+        [
+          "Charred",
+          "Highball"
+        ],
+        [
+          "Aged",
+          "Cobbler"
+        ],
+        [
+          "Distilled",
+          "Shrub"
+        ],
+        [
+          "Expressed",
+          "Tincture"
+        ],
+        [
+          "Torched",
+          "Toddy"
+        ],
+        [
+          "Cold-Brewed",
+          "Aperitif"
+        ],
+        [
+          "Hand-Harvested",
+          "Digestif"
+        ],
+        [
+          "Reserve",
+          "Reduction"
+        ],
+        [
+          "Single-Origin",
+          "Expression"
+        ],
+        [
+          "Estate",
+          "Composition"
+        ]
+      ]
+    },
+    {
+      "sectionId": "11",
+      "section": "Church / Congregation Name Generator",
+      "name": "Church / Congregation Name",
+      "dice": "2d20",
+      "diceKind": "pair",
+      "columns": 2,
+      "parentRoll": null,
+      "entries": [
+        [
+          "First",
+          "Baptist Church"
+        ],
+        [
+          "New Life",
+          "Community Church"
+        ],
+        [
+          "Grace",
+          "Fellowship"
+        ],
+        [
+          "Cornerstone",
+          "Assembly"
+        ],
+        [
+          "Victory",
+          "Ministries"
+        ],
+        [
+          "Calvary",
+          "Church of God"
+        ],
+        [
+          "Resurrection",
+          "Lutheran Church"
+        ],
+        [
+          "Living Word",
+          "Methodist Church"
+        ],
+        [
+          "Faith",
+          "Pentecostal Church"
+        ],
+        [
+          "Hope",
+          "Evangelical Church"
+        ],
+        [
+          "Mount Zion",
+          "Reformed Church"
+        ],
+        [
+          "Blessed",
+          "Presbyterian Church"
+        ],
+        [
+          "Sacred Heart",
+          "Church of Christ"
+        ],
+        [
+          "Abundant Life",
+          "Chapel"
+        ],
+        [
+          "Harvest",
+          "Cathedral"
+        ],
+        [
+          "Redeemer",
+          "Faith Center"
+        ],
+        [
+          "Christ the King",
+          "Worship Center"
+        ],
+        [
+          "Lighthouse",
+          "Bible Church"
+        ],
+        [
+          "Emmanuel",
+          "Outreach Center"
+        ],
+        [
+          "Covenant",
+          "Tabernacle"
+        ]
+      ]
+    },
+    {
+      "sectionId": "14",
+      "section": "Drug Street Name Generator",
+      "name": "Drug Street Name",
+      "dice": "2d20",
+      "diceKind": "pair",
+      "columns": 2,
+      "parentRoll": null,
+      "entries": [
+        [
+          "Blue",
+          "Dream"
+        ],
+        [
+          "White",
+          "Flash"
+        ],
+        [
+          "Black",
+          "Rain"
+        ],
+        [
+          "Red",
+          "Dust"
+        ],
+        [
+          "Green",
+          "Smoke"
+        ],
+        [
+          "Yellow",
+          "Fire"
+        ],
+        [
+          "Purple",
+          "Candy"
+        ],
+        [
+          "Crystal",
+          "Rock"
+        ],
+        [
+          "Ghost",
+          "Ice"
+        ],
+        [
+          "Shadow",
+          "Kiss"
+        ],
+        [
+          "Angel",
+          "Haze"
+        ],
+        [
+          "Devil",
+          "Drift"
+        ],
+        [
+          "Stone",
+          "Rush"
+        ],
+        [
+          "Honey",
+          "Ride"
+        ],
+        [
+          "Thunder",
+          "Burn"
+        ],
+        [
+          "Wild",
+          "Sugar"
+        ],
+        [
+          "Midnight",
+          "Snow"
+        ],
+        [
+          "Razor",
+          "Silk"
+        ],
+        [
+          "Soft",
+          "Slide"
+        ],
+        [
+          "Hard",
+          "Trip"
+        ]
+      ]
+    },
+    {
+      "sectionId": "15",
+      "section": "Gang / Crew Name Generator",
+      "name": "Gang / Crew Name",
+      "dice": "2d20",
+      "diceKind": "pair",
+      "columns": 2,
+      "parentRoll": null,
+      "entries": [
+        [
+          "Bloody",
+          "Dogs"
+        ],
+        [
+          "Iron",
+          "Wolves"
+        ],
+        [
+          "Silent",
+          "Crows"
+        ],
+        [
+          "Hollow",
+          "Kings"
+        ],
+        [
+          "Stone",
+          "Saints"
+        ],
+        [
+          "Cracked",
+          "Devils"
+        ],
+        [
+          "Broken",
+          "Vipers"
+        ],
+        [
+          "Cursed",
+          "Snakes"
+        ],
+        [
+          "Wicked",
+          "Hawks"
+        ],
+        [
+          "Wild",
+          "Ghosts"
+        ],
+        [
+          "Rusted",
+          "Rats"
+        ],
+        [
+          "Black",
+          "Jackals"
+        ],
+        [
+          "Pale",
+          "Foxes"
+        ],
+        [
+          "Scarred",
+          "Eagles"
+        ],
+        [
+          "Crooked",
+          "Hounds"
+        ],
+        [
+          "Burning",
+          "Thorns"
+        ],
+        [
+          "Lost",
+          "Bones"
+        ],
+        [
+          "Dirty",
+          "Knives"
+        ],
+        [
+          "Dead",
+          "Blades"
+        ],
+        [
+          "Cold",
+          "Fists"
+        ]
+      ]
+    },
+    {
+      "sectionId": "22",
+      "section": "Villain Motivation Generator",
+      "name": "Table A — Motivation Word",
+      "dice": "d100",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "villain-motivation",
+      "combineOrder": 1,
+      "entries": [
+        [
+          "Acquire"
+        ],
+        [
+          "Accumulate"
+        ],
+        [
+          "Claim"
+        ],
+        [
+          "Collect"
+        ],
+        [
+          "Command"
+        ],
+        [
+          "Control"
+        ],
+        [
+          "Consume"
+        ],
+        [
+          "Capture"
+        ],
+        [
+          "Dominate"
+        ],
+        [
+          "Exploit"
+        ],
+        [
+          "Extract"
+        ],
+        [
+          "Hoard"
+        ],
+        [
+          "Inherit"
+        ],
+        [
+          "Possess"
+        ],
+        [
+          "Reclaim"
+        ],
+        [
+          "Seize"
+        ],
+        [
+          "Steal"
+        ],
+        [
+          "Strip"
+        ],
+        [
+          "Take"
+        ],
+        [
+          "Win"
+        ],
+        [
+          "Burn"
+        ],
+        [
+          "Bury"
+        ],
+        [
+          "Destroy"
+        ],
+        [
+          "Dismantle"
+        ],
+        [
+          "Eliminate"
+        ],
+        [
+          "Erase"
+        ],
+        [
+          "Expose"
+        ],
+        [
+          "Gut"
+        ],
+        [
+          "Isolate"
+        ],
+        [
+          "Kill"
+        ],
+        [
+          "Purge"
+        ],
+        [
+          "Remove"
+        ],
+        [
+          "Replace"
+        ],
+        [
+          "Ruin"
+        ],
+        [
+          "Silence"
+        ],
+        [
+          "Starve"
+        ],
+        [
+          "Topple"
+        ],
+        [
+          "Undermine"
+        ],
+        [
+          "Unmask"
+        ],
+        [
+          "Wipe Out"
+        ],
+        [
+          "Atone"
+        ],
+        [
+          "Avenge"
+        ],
+        [
+          "Betray"
+        ],
+        [
+          "Corrupt"
+        ],
+        [
+          "Deny"
+        ],
+        [
+          "Escape"
+        ],
+        [
+          "Forget"
+        ],
+        [
+          "Grieve"
+        ],
+        [
+          "Humiliate"
+        ],
+        [
+          "Justify"
+        ],
+        [
+          "Mourn"
+        ],
+        [
+          "Obsess Over"
+        ],
+        [
+          "Outlive"
+        ],
+        [
+          "Overcome"
+        ],
+        [
+          "Prove"
+        ],
+        [
+          "Punish"
+        ],
+        [
+          "Redeem"
+        ],
+        [
+          "Regret"
+        ],
+        [
+          "Relive"
+        ],
+        [
+          "Survive"
+        ],
+        [
+          "Build"
+        ],
+        [
+          "Cleanse"
+        ],
+        [
+          "Convert"
+        ],
+        [
+          "Enforce"
+        ],
+        [
+          "Establish"
+        ],
+        [
+          "Impose"
+        ],
+        [
+          "Maintain"
+        ],
+        [
+          "Preserve"
+        ],
+        [
+          "Protect"
+        ],
+        [
+          "Rebuild"
+        ],
+        [
+          "Reform"
+        ],
+        [
+          "Reshape"
+        ],
+        [
+          "Restore"
+        ],
+        [
+          "Rewrite"
+        ],
+        [
+          "Rule"
+        ],
+        [
+          "Save"
+        ],
+        [
+          "Stabilize"
+        ],
+        [
+          "Sustain"
+        ],
+        [
+          "Unify"
+        ],
+        [
+          "Uphold"
+        ],
+        [
+          "Admit"
+        ],
+        [
+          "Conceal"
+        ],
+        [
+          "Confirm"
+        ],
+        [
+          "Deny"
+        ],
+        [
+          "Discover"
+        ],
+        [
+          "Expose"
+        ],
+        [
+          "Finish"
+        ],
+        [
+          "Learn"
+        ],
+        [
+          "Lose"
+        ],
+        [
+          "Realize"
+        ],
+        [
+          "Remember"
+        ],
+        [
+          "Repeat"
+        ],
+        [
+          "Reveal"
+        ],
+        [
+          "Sacrifice"
+        ],
+        [
+          "Settle"
+        ],
+        [
+          "Transcend"
+        ],
+        [
+          "Understand"
+        ],
+        [
+          "Validate"
+        ],
+        [
+          "Witness"
+        ],
+        [
+          "Become"
+        ]
+      ]
+    },
+    {
+      "sectionId": "22",
+      "section": "Villain Motivation Generator",
+      "name": "Table B — Subject",
+      "dice": "d100",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "villain-motivation",
+      "combineOrder": 2,
+      "entries": [
+        [
+          "A Rival"
+        ],
+        [
+          "A Mentor"
+        ],
+        [
+          "A Child"
+        ],
+        [
+          "A Parent"
+        ],
+        [
+          "A Sibling"
+        ],
+        [
+          "A Partner"
+        ],
+        [
+          "A Betrayer"
+        ],
+        [
+          "An Heir"
+        ],
+        [
+          "A Disciple"
+        ],
+        [
+          "An Enemy"
+        ],
+        [
+          "A Friend"
+        ],
+        [
+          "A Lover"
+        ],
+        [
+          "A Victim"
+        ],
+        [
+          "A Witness"
+        ],
+        [
+          "A Clone"
+        ],
+        [
+          "A Successor"
+        ],
+        [
+          "The Public"
+        ],
+        [
+          "The Innocent"
+        ],
+        [
+          "The Guilty"
+        ],
+        [
+          "Everyone"
+        ],
+        [
+          "The Church"
+        ],
+        [
+          "The Government"
+        ],
+        [
+          "The Military"
+        ],
+        [
+          "The Courts"
+        ],
+        [
+          "The Media"
+        ],
+        [
+          "The Economy"
+        ],
+        [
+          "The Police"
+        ],
+        [
+          "The Academy"
+        ],
+        [
+          "The Establishment"
+        ],
+        [
+          "The Underground"
+        ],
+        [
+          "A Corporation"
+        ],
+        [
+          "A Dynasty"
+        ],
+        [
+          "A Nation"
+        ],
+        [
+          "An Empire"
+        ],
+        [
+          "A Movement"
+        ],
+        [
+          "A Bloodline"
+        ],
+        [
+          "A Religion"
+        ],
+        [
+          "A Culture"
+        ],
+        [
+          "A City"
+        ],
+        [
+          "A Border"
+        ],
+        [
+          "Legacy"
+        ],
+        [
+          "Power"
+        ],
+        [
+          "Truth"
+        ],
+        [
+          "Justice"
+        ],
+        [
+          "Order"
+        ],
+        [
+          "Chaos"
+        ],
+        [
+          "Freedom"
+        ],
+        [
+          "Control"
+        ],
+        [
+          "Honor"
+        ],
+        [
+          "Shame"
+        ],
+        [
+          "Loyalty"
+        ],
+        [
+          "Memory"
+        ],
+        [
+          "Identity"
+        ],
+        [
+          "History"
+        ],
+        [
+          "The Future"
+        ],
+        [
+          "The Past"
+        ],
+        [
+          "Morality"
+        ],
+        [
+          "Balance"
+        ],
+        [
+          "Fate"
+        ],
+        [
+          "Progress"
+        ],
+        [
+          "Wealth"
+        ],
+        [
+          "Land"
+        ],
+        [
+          "A Weapon"
+        ],
+        [
+          "A Secret"
+        ],
+        [
+          "A Throne"
+        ],
+        [
+          "A Formula"
+        ],
+        [
+          "A Name"
+        ],
+        [
+          "A Title"
+        ],
+        [
+          "A Territory"
+        ],
+        [
+          "A Resource"
+        ],
+        [
+          "An Artifact"
+        ],
+        [
+          "A Contract"
+        ],
+        [
+          "A Record"
+        ],
+        [
+          "A Body"
+        ],
+        [
+          "A Code"
+        ],
+        [
+          "A Map"
+        ],
+        [
+          "A Cure"
+        ],
+        [
+          "A Debt"
+        ],
+        [
+          "A Key"
+        ],
+        [
+          "Evidence"
+        ],
+        [
+          "Everything"
+        ],
+        [
+          "Nothing"
+        ],
+        [
+          "Oblivion"
+        ],
+        [
+          "Immortality"
+        ],
+        [
+          "Absolution"
+        ],
+        [
+          "Perfection"
+        ],
+        [
+          "Suffering"
+        ],
+        [
+          "Meaning"
+        ],
+        [
+          "God"
+        ],
+        [
+          "The Truth"
+        ],
+        [
+          "A Second Chance"
+        ],
+        [
+          "The Right to Exist"
+        ],
+        [
+          "What Was Taken"
+        ],
+        [
+          "What Was Promised"
+        ],
+        [
+          "What Was Lost"
+        ],
+        [
+          "What They Deserve"
+        ],
+        [
+          "The Version of Themselves That Survived"
+        ],
+        [
+          "The Thing They Can't Name"
+        ],
+        [
+          "The Last One"
+        ],
+        [
+          "The Only Thing Left"
         ]
       ]
     }
