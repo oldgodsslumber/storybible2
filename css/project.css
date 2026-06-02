@@ -597,6 +597,46 @@ body { display: flex; flex-direction: column; height: 100vh; }
 .oracle-cat-body { padding: 6px 16px 16px; display: flex; flex-direction: column; gap: 8px; }
 .oracle-cat-desc { margin: 0 0 6px 0; }
 
+/* Combine group (nested inside a category — for Megacorp, News Network, etc.) */
+.oracle-combine-group {
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.oracle-combine-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+.oracle-combine-summary::-webkit-details-marker { display: none; }
+.oracle-combine-caret {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--muted);
+  transition: transform 0.15s;
+  width: 12px;
+  text-align: center;
+}
+.oracle-combine-group[open] > .oracle-combine-summary > .oracle-combine-caret { transform: rotate(90deg); }
+.oracle-combine-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.oracle-combine-title { font-weight: 600; font-size: 14px; }
+.oracle-combine-meta { font-size: 12px; }
+.oracle-combine-last { font-size: 12px; color: var(--accent); }
+.oracle-combine-last:empty { display: none; }
+.oracle-combine-roll { flex-shrink: 0; }
+.oracle-combine-body { padding: 4px 14px 12px; display: flex; flex-direction: column; gap: 6px; }
+.oracle-combine-group .oracle-table-card { background: var(--bg-elev); }
+
 /* Nation collapsible (nested inside the Names category) */
 .oracle-nation {
   background: var(--bg-elev-2);

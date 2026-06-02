@@ -142,7 +142,7 @@ export function renderOracle(container) {
       if (cat.layout === "byNation") {
         renderNationsLayout(body, matched, q);
       } else {
-        for (const t of matched) body.appendChild(renderTableCard(t));
+        renderTablesWithGroups(body, matched, q);
       }
       categoriesEl.appendChild(catEl);
     }
@@ -150,6 +150,71 @@ export function renderOracle(container) {
     if (!anyVisible) {
       categoriesEl.innerHTML = `<p class="muted">No tables match "${esc(q)}".</p>`;
     }
+  }
+
+  // Render tables in a category, grouping any that share a `combineGroup`
+  // under a parent collapsible with a "Roll combined" button. Tables
+  // without a combineGroup render standalone, same as before.
+  function renderTablesWithGroups(body, tables, q) {
+    const groups = new Map(); // combineGroup → [tables]
+    const standalone = [];
+    for (const t of tables) {
+      if (t.combineGroup) {
+        if (!groups.has(t.combineGroup)) groups.set(t.combineGroup, []);
+        groups.get(t.combineGroup).push(t);
+      } else {
+        standalone.push(t);
+      }
+    }
+    // Render combine groups first
+    for (const [groupId, groupTables] of groups) {
+      groupTables.sort((a, b) => (a.combineOrder || 0) - (b.combineOrder || 0));
+      body.appendChild(renderCombineGroup(groupId, groupTables, q));
+    }
+    // Then standalone tables
+    for (const t of standalone) body.appendChild(renderTableCard(t));
+  }
+
+  function renderCombineGroup(groupId, groupTables, q) {
+    const groupName = groupTables[0]?.section || groupId;
+    const groupKey = `combine:${groupId}`;
+    const groupLast = lastRollByTableKey.get(groupKey);
+    const wrap = document.createElement("details");
+    wrap.className = "oracle-combine-group";
+    if (q) wrap.open = true;
+    wrap.innerHTML = `
+      <summary class="oracle-combine-summary">
+        <span class="oracle-combine-caret">▶</span>
+        <div class="oracle-combine-info">
+          <span class="oracle-combine-title">${esc(groupName)}</span>
+          <span class="oracle-combine-meta muted small">${groupTables.length} sub-tables · combined roll available</span>
+          <span class="oracle-combine-last muted small" data-combine-last>${groupLast ? `last: <strong>${esc(groupLast.result)}</strong>` : ""}</span>
+        </div>
+        <button class="oracle-combine-roll primary small" type="button">🎲 Roll combined</button>
+      </summary>
+      <div class="oracle-combine-body"></div>
+    `;
+    const cbody = wrap.querySelector(".oracle-combine-body");
+    for (const t of groupTables) cbody.appendChild(renderTableCard(t, /*compactLabel*/ true, groupName + " — "));
+
+    wrap.querySelector(".oracle-combine-roll").addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const results = [];
+      const details = [];
+      for (const t of groupTables) {
+        const r = rollSilently(t);
+        results.push(r.value);
+        details.push(r.detail);
+      }
+      const combined = results.join(" ");
+      lastRollByTableKey.set(groupKey, { result: combined, detail: details.join("  +  ") });
+      const lastEl = wrap.querySelector("[data-combine-last]");
+      if (lastEl) lastEl.innerHTML = `last: <strong>${esc(combined)}</strong>`;
+      recordRoll(groupName, groupName, combined, details.join("  +  "));
+      showFloatingResult(`${groupName}: ${combined}`);
+    });
+    return wrap;
   }
 
   function renderNationsLayout(body, nameTables, q) {

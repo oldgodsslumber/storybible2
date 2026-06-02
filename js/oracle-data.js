@@ -3809,77 +3809,6 @@ export const ORACLE = {
       ]
     },
     {
-      "sectionId": "6",
-      "section": "News Network Name Generator (2d20 + d20)",
-      "name": "Word 3 (Type)",
-      "dice": "d20",
-      "diceKind": "single",
-      "columns": 1,
-      "parentRoll": null,
-      "entries": [
-        [
-          "Network"
-        ],
-        [
-          "Channel"
-        ],
-        [
-          "TV"
-        ],
-        [
-          "Service"
-        ],
-        [
-          "Bureau"
-        ],
-        [
-          "Group"
-        ],
-        [
-          "Team"
-        ],
-        [
-          "Media"
-        ],
-        [
-          "Corp"
-        ],
-        [
-          "Holdings"
-        ],
-        [
-          "Studio"
-        ],
-        [
-          "Center"
-        ],
-        [
-          "Organization"
-        ],
-        [
-          "Association"
-        ],
-        [
-          "Division"
-        ],
-        [
-          "Platform"
-        ],
-        [
-          "Systems"
-        ],
-        [
-          "Communications"
-        ],
-        [
-          "Productions"
-        ],
-        [
-          "Worldwide"
-        ]
-      ]
-    },
-    {
       "sectionId": "7",
       "section": "Fast Food Name Generator (2d20)",
       "name": "7. Fast Food Name Generator",
@@ -4062,77 +3991,6 @@ export const ORACLE = {
       ]
     },
     {
-      "sectionId": "8",
-      "section": "Small Business Name Generator (2d20 + d20)",
-      "name": "Word 3 / Suffix",
-      "dice": "d20",
-      "diceKind": "single",
-      "columns": 1,
-      "parentRoll": null,
-      "entries": [
-        [
-          "Solutions"
-        ],
-        [
-          "Services"
-        ],
-        [
-          "Group"
-        ],
-        [
-          "Co."
-        ],
-        [
-          "LLC"
-        ],
-        [
-          "Associates"
-        ],
-        [
-          "Consulting"
-        ],
-        [
-          "Partners"
-        ],
-        [
-          "Industries"
-        ],
-        [
-          "Works"
-        ],
-        [
-          "Supply"
-        ],
-        [
-          "Trades"
-        ],
-        [
-          "Professionals"
-        ],
-        [
-          "Specialists"
-        ],
-        [
-          "Enterprises"
-        ],
-        [
-          "Resources"
-        ],
-        [
-          "Management"
-        ],
-        [
-          "Support"
-        ],
-        [
-          "Systems"
-        ],
-        [
-          "Depot"
-        ]
-      ]
-    },
-    {
       "sectionId": "10",
       "section": "Bar / Dive Bar Name Generator (2d20)",
       "name": "10. Bar / Dive Bar Name Generator",
@@ -4311,77 +4169,6 @@ export const ORACLE = {
         [
           "The Seasonal",
           "Quarter"
-        ]
-      ]
-    },
-    {
-      "sectionId": "13",
-      "section": "Megacorp / Conglomerate Name Generator (2d20 + d20)",
-      "name": "Word 3 / Entity Type",
-      "dice": "d20",
-      "diceKind": "single",
-      "columns": 1,
-      "parentRoll": null,
-      "entries": [
-        [
-          "Corp"
-        ],
-        [
-          "Inc."
-        ],
-        [
-          "Ltd."
-        ],
-        [
-          "Group"
-        ],
-        [
-          "Authority"
-        ],
-        [
-          "Associates"
-        ],
-        [
-          "Consortium"
-        ],
-        [
-          "Institute"
-        ],
-        [
-          "Foundation"
-        ],
-        [
-          "Division"
-        ],
-        [
-          "Alliance"
-        ],
-        [
-          "Coalition"
-        ],
-        [
-          "Federation"
-        ],
-        [
-          "Syndicate"
-        ],
-        [
-          "Exchange"
-        ],
-        [
-          "Bureau"
-        ],
-        [
-          "Agency"
-        ],
-        [
-          "Directorate"
-        ],
-        [
-          "Conglomerate"
-        ],
-        [
-          "Trust"
         ]
       ]
     },
@@ -20325,6 +20112,1023 @@ export const ORACLE = {
         ],
         [
           "Insurance & Risk Management"
+        ]
+      ]
+    },
+    {
+      "sectionId": "6",
+      "section": "News Network Name Generator",
+      "name": "News Network — Word 1 (Adjective)",
+      "dice": "d40",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "news-network",
+      "combineOrder": 1,
+      "entries": [
+        [
+          "National"
+        ],
+        [
+          "Global"
+        ],
+        [
+          "American"
+        ],
+        [
+          "Liberty"
+        ],
+        [
+          "Patriot"
+        ],
+        [
+          "Federal"
+        ],
+        [
+          "Capital"
+        ],
+        [
+          "Heritage"
+        ],
+        [
+          "United"
+        ],
+        [
+          "Allied"
+        ],
+        [
+          "Modern"
+        ],
+        [
+          "Prime"
+        ],
+        [
+          "Summit"
+        ],
+        [
+          "Nexus"
+        ],
+        [
+          "Anchor"
+        ],
+        [
+          "Pacific"
+        ],
+        [
+          "Atlantic"
+        ],
+        [
+          "Continental"
+        ],
+        [
+          "Central"
+        ],
+        [
+          "Coastal"
+        ],
+        [
+          "Frontier"
+        ],
+        [
+          "Inland"
+        ],
+        [
+          "Midwest"
+        ],
+        [
+          "Southern"
+        ],
+        [
+          "Western"
+        ],
+        [
+          "Tri-State"
+        ],
+        [
+          "Metro"
+        ],
+        [
+          "Regional"
+        ],
+        [
+          "Local"
+        ],
+        [
+          "Independent"
+        ],
+        [
+          "Free"
+        ],
+        [
+          "Open"
+        ],
+        [
+          "Trusted"
+        ],
+        [
+          "Verified"
+        ],
+        [
+          "Direct"
+        ],
+        [
+          "Clear"
+        ],
+        [
+          "True"
+        ],
+        [
+          "Honest"
+        ],
+        [
+          "Bold"
+        ],
+        [
+          "Forward"
+        ]
+      ]
+    },
+    {
+      "sectionId": "6",
+      "section": "News Network Name Generator",
+      "name": "News Network — Word 2 (Topic)",
+      "dice": "d40",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "news-network",
+      "combineOrder": 2,
+      "entries": [
+        [
+          "News"
+        ],
+        [
+          "Media"
+        ],
+        [
+          "Broadcast"
+        ],
+        [
+          "Report"
+        ],
+        [
+          "Watch"
+        ],
+        [
+          "Wire"
+        ],
+        [
+          "Signal"
+        ],
+        [
+          "Pulse"
+        ],
+        [
+          "Voice"
+        ],
+        [
+          "Source"
+        ],
+        [
+          "Coverage"
+        ],
+        [
+          "Analysis"
+        ],
+        [
+          "Update"
+        ],
+        [
+          "Live"
+        ],
+        [
+          "Today"
+        ],
+        [
+          "Alert"
+        ],
+        [
+          "Insight"
+        ],
+        [
+          "Review"
+        ],
+        [
+          "Monitor"
+        ],
+        [
+          "Stream"
+        ],
+        [
+          "Feed"
+        ],
+        [
+          "Brief"
+        ],
+        [
+          "Beat"
+        ],
+        [
+          "Desk"
+        ],
+        [
+          "Channel"
+        ],
+        [
+          "Report"
+        ],
+        [
+          "Headline"
+        ],
+        [
+          "Bulletin"
+        ],
+        [
+          "Dispatch"
+        ],
+        [
+          "Hub"
+        ],
+        [
+          "Forum"
+        ],
+        [
+          "Network"
+        ],
+        [
+          "Journal"
+        ],
+        [
+          "Press"
+        ],
+        [
+          "Roundup"
+        ],
+        [
+          "Outlook"
+        ],
+        [
+          "Digest"
+        ],
+        [
+          "Tracker"
+        ],
+        [
+          "Correspondent"
+        ],
+        [
+          "Edition"
+        ]
+      ]
+    },
+    {
+      "sectionId": "6",
+      "section": "News Network Name Generator",
+      "name": "News Network — Word 3 (Type)",
+      "dice": "d20",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "news-network",
+      "combineOrder": 3,
+      "entries": [
+        [
+          "Network"
+        ],
+        [
+          "Channel"
+        ],
+        [
+          "TV"
+        ],
+        [
+          "Service"
+        ],
+        [
+          "Bureau"
+        ],
+        [
+          "Group"
+        ],
+        [
+          "Team"
+        ],
+        [
+          "Media"
+        ],
+        [
+          "Corp"
+        ],
+        [
+          "Holdings"
+        ],
+        [
+          "Studio"
+        ],
+        [
+          "Center"
+        ],
+        [
+          "Organization"
+        ],
+        [
+          "Association"
+        ],
+        [
+          "Division"
+        ],
+        [
+          "Platform"
+        ],
+        [
+          "Systems"
+        ],
+        [
+          "Communications"
+        ],
+        [
+          "Productions"
+        ],
+        [
+          "Worldwide"
+        ]
+      ]
+    },
+    {
+      "sectionId": "8",
+      "section": "Small Business Name Generator",
+      "name": "Small Business — Word 1 (Adjective)",
+      "dice": "d40",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "small-business",
+      "combineOrder": 1,
+      "entries": [
+        [
+          "Golden"
+        ],
+        [
+          "Silver"
+        ],
+        [
+          "Blue"
+        ],
+        [
+          "Red"
+        ],
+        [
+          "Iron"
+        ],
+        [
+          "Summit"
+        ],
+        [
+          "Anchor"
+        ],
+        [
+          "Harbor"
+        ],
+        [
+          "Crown"
+        ],
+        [
+          "Oak"
+        ],
+        [
+          "Cedar"
+        ],
+        [
+          "Maple"
+        ],
+        [
+          "Keystone"
+        ],
+        [
+          "Frontier"
+        ],
+        [
+          "Pioneer"
+        ],
+        [
+          "Sterling"
+        ],
+        [
+          "Legacy"
+        ],
+        [
+          "Broadside"
+        ],
+        [
+          "North Star"
+        ],
+        [
+          "Apex"
+        ],
+        [
+          "Copper"
+        ],
+        [
+          "Granite"
+        ],
+        [
+          "Tidewater"
+        ],
+        [
+          "Ironwood"
+        ],
+        [
+          "Clearwater"
+        ],
+        [
+          "Ridgecrest"
+        ],
+        [
+          "Millstone"
+        ],
+        [
+          "Hearthside"
+        ],
+        [
+          "Sandstone"
+        ],
+        [
+          "Longview"
+        ],
+        [
+          "Saltwater"
+        ],
+        [
+          "Pinecrest"
+        ],
+        [
+          "Blackwater"
+        ],
+        [
+          "Greenfield"
+        ],
+        [
+          "Redstone"
+        ],
+        [
+          "Bluegrass"
+        ],
+        [
+          "Hillside"
+        ],
+        [
+          "Westfield"
+        ],
+        [
+          "Northbrook"
+        ],
+        [
+          "Eastgate"
+        ]
+      ]
+    },
+    {
+      "sectionId": "8",
+      "section": "Small Business Name Generator",
+      "name": "Small Business — Word 2 (Trade)",
+      "dice": "d40",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "small-business",
+      "combineOrder": 2,
+      "entries": [
+        [
+          "Key"
+        ],
+        [
+          "Bridge"
+        ],
+        [
+          "Gate"
+        ],
+        [
+          "Path"
+        ],
+        [
+          "Ridge"
+        ],
+        [
+          "Point"
+        ],
+        [
+          "Edge"
+        ],
+        [
+          "Peak"
+        ],
+        [
+          "Crest"
+        ],
+        [
+          "Stone"
+        ],
+        [
+          "Creek"
+        ],
+        [
+          "Lake"
+        ],
+        [
+          "Field"
+        ],
+        [
+          "Hill"
+        ],
+        [
+          "Valley"
+        ],
+        [
+          "Bay"
+        ],
+        [
+          "Cliff"
+        ],
+        [
+          "Grove"
+        ],
+        [
+          "Hollow"
+        ],
+        [
+          "Bluff"
+        ],
+        [
+          "Crossing"
+        ],
+        [
+          "Landing"
+        ],
+        [
+          "Harbor"
+        ],
+        [
+          "Run"
+        ],
+        [
+          "Bend"
+        ],
+        [
+          "Fork"
+        ],
+        [
+          "Reach"
+        ],
+        [
+          "Spur"
+        ],
+        [
+          "Pass"
+        ],
+        [
+          "Ledge"
+        ],
+        [
+          "Notch"
+        ],
+        [
+          "Gap"
+        ],
+        [
+          "Trace"
+        ],
+        [
+          "Flat"
+        ],
+        [
+          "Strand"
+        ],
+        [
+          "Dell"
+        ],
+        [
+          "Glen"
+        ],
+        [
+          "Knoll"
+        ],
+        [
+          "Heath"
+        ],
+        [
+          "Moor"
+        ]
+      ]
+    },
+    {
+      "sectionId": "8",
+      "section": "Small Business Name Generator",
+      "name": "Small Business — Word 3 (Suffix)",
+      "dice": "d20",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "small-business",
+      "combineOrder": 3,
+      "entries": [
+        [
+          "Solutions"
+        ],
+        [
+          "Services"
+        ],
+        [
+          "Group"
+        ],
+        [
+          "Co."
+        ],
+        [
+          "LLC"
+        ],
+        [
+          "Associates"
+        ],
+        [
+          "Consulting"
+        ],
+        [
+          "Partners"
+        ],
+        [
+          "Industries"
+        ],
+        [
+          "Works"
+        ],
+        [
+          "Supply"
+        ],
+        [
+          "Trades"
+        ],
+        [
+          "Professionals"
+        ],
+        [
+          "Specialists"
+        ],
+        [
+          "Enterprises"
+        ],
+        [
+          "Resources"
+        ],
+        [
+          "Management"
+        ],
+        [
+          "Support"
+        ],
+        [
+          "Systems"
+        ],
+        [
+          "Depot"
+        ]
+      ]
+    },
+    {
+      "sectionId": "13",
+      "section": "Megacorp Name Generator",
+      "name": "Megacorp — Word 1 (Root)",
+      "dice": "d40",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "megacorp",
+      "combineOrder": 1,
+      "entries": [
+        [
+          "Axiom"
+        ],
+        [
+          "Synth"
+        ],
+        [
+          "Vector"
+        ],
+        [
+          "Nexus"
+        ],
+        [
+          "Apex"
+        ],
+        [
+          "Stratos"
+        ],
+        [
+          "Veridian"
+        ],
+        [
+          "Omnex"
+        ],
+        [
+          "Helix"
+        ],
+        [
+          "Praxis"
+        ],
+        [
+          "Zenith"
+        ],
+        [
+          "Solaris"
+        ],
+        [
+          "Arctec"
+        ],
+        [
+          "Myriad"
+        ],
+        [
+          "Kronos"
+        ],
+        [
+          "Hyperion"
+        ],
+        [
+          "Echelon"
+        ],
+        [
+          "Parallax"
+        ],
+        [
+          "Tectum"
+        ],
+        [
+          "Vantage"
+        ],
+        [
+          "Orion"
+        ],
+        [
+          "Cipher"
+        ],
+        [
+          "Quantum"
+        ],
+        [
+          "Pragma"
+        ],
+        [
+          "Veritas"
+        ],
+        [
+          "Alliant"
+        ],
+        [
+          "Centurion"
+        ],
+        [
+          "Monolith"
+        ],
+        [
+          "Astral"
+        ],
+        [
+          "Crucible"
+        ],
+        [
+          "Meridian"
+        ],
+        [
+          "Axiom"
+        ],
+        [
+          "Revenant"
+        ],
+        [
+          "Seraph"
+        ],
+        [
+          "Oberon"
+        ],
+        [
+          "Trinova"
+        ],
+        [
+          "Kestrel"
+        ],
+        [
+          "Fulcrum"
+        ],
+        [
+          "Archon"
+        ],
+        [
+          "Hegemony"
+        ]
+      ]
+    },
+    {
+      "sectionId": "13",
+      "section": "Megacorp Name Generator",
+      "name": "Megacorp — Word 2 (Function)",
+      "dice": "d40",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "megacorp",
+      "combineOrder": 2,
+      "entries": [
+        [
+          "Systems"
+        ],
+        [
+          "Dynamics"
+        ],
+        [
+          "Industries"
+        ],
+        [
+          "Solutions"
+        ],
+        [
+          "Technologies"
+        ],
+        [
+          "Holdings"
+        ],
+        [
+          "Capital"
+        ],
+        [
+          "Enterprises"
+        ],
+        [
+          "Resources"
+        ],
+        [
+          "Global"
+        ],
+        [
+          "Ventures"
+        ],
+        [
+          "Partners"
+        ],
+        [
+          "Collective"
+        ],
+        [
+          "Consolidated"
+        ],
+        [
+          "Integrated"
+        ],
+        [
+          "International"
+        ],
+        [
+          "Worldwide"
+        ],
+        [
+          "Networks"
+        ],
+        [
+          "Infrastructure"
+        ],
+        [
+          "Logistics"
+        ],
+        [
+          "Operations"
+        ],
+        [
+          "Platforms"
+        ],
+        [
+          "Applications"
+        ],
+        [
+          "Analytics"
+        ],
+        [
+          "Innovations"
+        ],
+        [
+          "Strategies"
+        ],
+        [
+          "Investments"
+        ],
+        [
+          "Properties"
+        ],
+        [
+          "Development"
+        ],
+        [
+          "Services"
+        ],
+        [
+          "Manufacturing"
+        ],
+        [
+          "Distribution"
+        ],
+        [
+          "Communications"
+        ],
+        [
+          "Security"
+        ],
+        [
+          "Defense"
+        ],
+        [
+          "Energy"
+        ],
+        [
+          "Financial"
+        ],
+        [
+          "Medical"
+        ],
+        [
+          "Aerospace"
+        ],
+        [
+          "Environmental"
+        ]
+      ]
+    },
+    {
+      "sectionId": "13",
+      "section": "Megacorp Name Generator",
+      "name": "Megacorp — Word 3 (Entity Type)",
+      "dice": "d20",
+      "diceKind": "single",
+      "columns": 1,
+      "parentRoll": null,
+      "combineGroup": "megacorp",
+      "combineOrder": 3,
+      "entries": [
+        [
+          "Corp"
+        ],
+        [
+          "Inc."
+        ],
+        [
+          "Ltd."
+        ],
+        [
+          "Group"
+        ],
+        [
+          "Authority"
+        ],
+        [
+          "Associates"
+        ],
+        [
+          "Consortium"
+        ],
+        [
+          "Institute"
+        ],
+        [
+          "Foundation"
+        ],
+        [
+          "Division"
+        ],
+        [
+          "Alliance"
+        ],
+        [
+          "Coalition"
+        ],
+        [
+          "Federation"
+        ],
+        [
+          "Syndicate"
+        ],
+        [
+          "Exchange"
+        ],
+        [
+          "Bureau"
+        ],
+        [
+          "Agency"
+        ],
+        [
+          "Directorate"
+        ],
+        [
+          "Conglomerate"
+        ],
+        [
+          "Trust"
         ]
       ]
     }
