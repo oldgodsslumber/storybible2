@@ -279,27 +279,41 @@ export function renderOracle(container) {
   }
 
   function renderHistory() {
+    historyEl.innerHTML = `<h4>Recent rolls ${history.length > 0 ? `<button class="ghost small clear-rolls" type="button">Clear</button>` : ""}</h4>`;
     if (history.length === 0) {
-      historyEl.innerHTML = "";
+      const empty = document.createElement("p");
+      empty.className = "oracle-history-empty";
+      empty.textContent = "Roll on any table — results stream here, newest first.";
+      historyEl.appendChild(empty);
       return;
     }
-    historyEl.innerHTML = `<h4>Recent rolls <button class="ghost small clear-rolls">Clear</button></h4>`;
     const ul = document.createElement("ul");
     ul.className = "oracle-history-list";
     for (const h of history) {
       const li = document.createElement("li");
       li.innerHTML = `
         <div class="oracle-history-main">${esc(h.result)}</div>
-        <div class="muted small">${esc(h.tableName)} · ${esc(h.detail)}</div>
+        <div class="oracle-history-meta">
+          ${esc(h.tableName)} · ${esc(h.detail)} · <span class="oracle-history-time" data-ts="${h.ts}">${esc(relativeTime(h.ts))}</span>
+        </div>
       `;
       ul.appendChild(li);
     }
     historyEl.appendChild(ul);
-    historyEl.querySelector(".clear-rolls").addEventListener("click", () => {
+    historyEl.querySelector(".clear-rolls")?.addEventListener("click", () => {
       history = [];
       renderHistory();
     });
   }
+
+  // Update timestamps every 30 seconds so the news feed feels live
+  // ("just now" → "1m ago" → "5m ago", etc.) without re-rendering the whole list.
+  setInterval(() => {
+    historyEl.querySelectorAll(".oracle-history-time").forEach(el => {
+      const ts = parseInt(el.dataset.ts, 10);
+      if (!Number.isNaN(ts)) el.textContent = relativeTime(ts);
+    });
+  }, 30000);
 
   // Floating toast at the top of the panel so the user sees the roll
   // result without having to scroll to the history.
@@ -325,6 +339,18 @@ export function renderOracle(container) {
 function renderEntryText(row) {
   if (!Array.isArray(row)) return String(row || "");
   return row.filter(Boolean).join(" — ");
+}
+
+function relativeTime(ts) {
+  const diff = Date.now() - ts;
+  if (diff < 30000) return "just now";
+  if (diff < 60000) return "less than a minute ago";
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
 function esc(s) {
