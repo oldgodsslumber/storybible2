@@ -180,10 +180,15 @@ export function renderOracle(container) {
       const combinedFirst = tables.find(t => t.name.endsWith("— First Names"));
       const lastNames = tables.find(t => t.name.endsWith("— Last Names"));
       const hasFullName = combinedFirst && lastNames;
+      const nationKey = `nation:${country}`;
+      const nationLast = lastRollByTableKey.get(nationKey);
       nationEl.innerHTML = `
         <summary class="oracle-nation-summary">
           <span class="oracle-nation-caret">▶</span>
-          <span class="oracle-nation-title">${esc(country)}</span>
+          <div class="oracle-nation-info">
+            <span class="oracle-nation-title">${esc(country)}</span>
+            <span class="oracle-nation-last muted small" data-nation-last>${nationLast ? `last full name: <strong>${esc(nationLast.result)}</strong>` : ""}</span>
+          </div>
           ${hasFullName ? `<button class="oracle-nation-fullname primary small" type="button">🎲 Full name</button>` : ""}
         </summary>
         <div class="oracle-nation-body"></div>
@@ -200,6 +205,11 @@ export function renderOracle(container) {
           // Strip "(F)/(M)" tag from first name
           const firstClean = (first.value || "").replace(/\s*\([FM]\)\s*$/, "");
           const full = `${firstClean} ${last.value}`;
+          // Persist the result on the nation so it stays visible inline,
+          // matching the per-table-card "last: X" pattern.
+          lastRollByTableKey.set(nationKey, { result: full, detail: `${first.detail}  +  ${last.detail}` });
+          const lastEl = nationEl.querySelector("[data-nation-last]");
+          if (lastEl) lastEl.innerHTML = `last full name: <strong>${esc(full)}</strong>`;
           recordRoll(`${country} — Full Name`, country, full, `${first.detail}  +  ${last.detail}`);
           showFloatingResult(`${country}: ${full}`);
         });

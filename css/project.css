@@ -622,7 +622,16 @@ body { display: flex; flex-direction: column; height: 100vh; }
   text-align: center;
 }
 .oracle-nation[open] > .oracle-nation-summary > .oracle-nation-caret { transform: rotate(90deg); }
-.oracle-nation-title { flex: 1; font-weight: 600; font-size: 14px; }
+.oracle-nation-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.oracle-nation-title { font-weight: 600; font-size: 14px; }
+.oracle-nation-last { font-size: 12px; color: var(--accent); }
+.oracle-nation-last:empty { display: none; }
 .oracle-nation-fullname { flex-shrink: 0; }
 .oracle-nation-body { padding: 4px 14px 12px; display: flex; flex-direction: column; gap: 6px; }
 
