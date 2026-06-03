@@ -57,15 +57,91 @@ body { display: flex; flex-direction: column; height: 100vh; }
   width: 100%;
   height: 100%;
 }
-.canvas-recenter-btn {
+.canvas-controls {
   position: absolute;
   top: 12px;
   left: 12px;
   z-index: 4;
+  display: flex;
+  gap: 6px;
+}
+.canvas-controls button {
   background: var(--bg-elev);
   border: 1px solid var(--border);
 }
-.canvas-recenter-btn:hover { border-color: var(--accent); }
+.canvas-controls button:hover { border-color: var(--accent); }
+.canvas-recenter-btn { background: var(--bg-elev); border: 1px solid var(--border); }
+
+.canvas-filters {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 4;
+  width: 220px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.canvas-filters-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.canvas-filters-head strong {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+}
+.canvas-filters-head button {
+  min-width: 26px;
+  min-height: 26px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.canvas-filters-body {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.canvas-filters-body.hidden { display: none; }
+.canvas-filter-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg-elev-2);
+  margin: 0;
+}
+.canvas-filter-chip:hover { background: rgba(122,156,255,0.08); }
+.canvas-filter-chip input { margin: 0; }
+.canvas-filter-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+}
+.canvas-filter-swatch.char { background: var(--character); }
+.canvas-filter-swatch.loc  { background: var(--location); }
+.canvas-filter-swatch.thm  { background: var(--theme); }
+.canvas-filter-swatch.arc  { background: var(--arc); }
+.canvas-filter-swatch.beat { background: var(--beat); }
+.canvas-filters-body input[type=search] {
+  margin-top: 4px;
+  font-size: 13px;
+  padding: 6px 8px;
+}
+.canvas-filter-stats { margin: 4px 0 0 0; }
 
 .card-editor {
   position: fixed;

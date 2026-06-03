@@ -17,7 +17,7 @@ import {
   suggestTraits, applyTraitSuggestions, openTraitSuggestModal,
   openSceneProposalModal
 } from "./review.js";
-import { renderOracle } from "./oracle.js?v=20260603a";
+import { renderOracle } from "./oracle.js?v=20260603b";
 import { openStorySettingsModal, getColumnsForProject, defaultColumnId } from "./story-settings.js";
 import { provideExtractionStateRef } from "./extraction.js";
 import { mountLlmConfigBanner } from "./settings.js?v=20260530";
@@ -53,6 +53,12 @@ const els = {
   refreshBadge: document.getElementById("refreshBadge"),
   recenterBtn: document.getElementById("recenterBtn"),
   storySettingsBtn: document.getElementById("storySettingsBtn"),
+  canvasFilters: document.getElementById("canvasFilters"),
+  canvasFiltersBody: document.getElementById("canvasFiltersBody"),
+  canvasFiltersToggle: document.getElementById("canvasFiltersToggle"),
+  canvasFilterSearch: document.getElementById("canvasFilterSearch"),
+  canvasFilterStats: document.getElementById("canvasFilterStats"),
+  canvasRelayoutBtn: document.getElementById("canvasRelayoutBtn"),
   captureView: document.getElementById("captureView"),
   captureNotePanel: document.getElementById("captureNotePanel"),
   captureProcessBtn: document.getElementById("captureProcessBtn"),
@@ -76,6 +82,10 @@ const state = {
   selectedCardId: null,
   connectMode: false,
   connectFrom: null,
+  // Canvas filter state — which card types are shown. Persisted in
+  // sessionStorage so it survives view switches but resets in a new tab.
+  canvasFilterTypes: new Set(["character", "location", "theme", "arc", "beat"]),
+  canvasFilterText: "",
 };
 
 if (!projectId) {
@@ -179,6 +189,81 @@ els.recenterBtn?.addEventListener("click", () => {
   state.cy.resize();
   state.cy.fit(undefined, 40);
 });
+els.canvasRelayoutBtn?.addEventListener("click", () => {
+  if (!state.cy) return;
+  if (!confirm("Run a fresh auto-layout? This will reposition every node based on the current graph shape. Your manual arrangement will be lost.")) return;
+  forceFullLayout();
+});
+
+// Canvas filters: type checkboxes + name search. Apply on change.
+document.querySelectorAll("[data-filter-type]").forEach(cb => {
+  cb.addEventListener("change", () => {
+    const type = cb.dataset.filterType;
+    if (cb.checked) state.canvasFilterTypes.add(type);
+    else state.canvasFilterTypes.delete(type);
+    saveCanvasFilterState();
+    applyCanvasFilters();
+  });
+});
+els.canvasFilterSearch?.addEventListener("input", () => {
+  state.canvasFilterText = els.canvasFilterSearch.value.trim().toLowerCase();
+  applyCanvasFilters();
+});
+els.canvasFiltersToggle?.addEventListener("click", () => {
+  const body = els.canvasFiltersBody;
+  if (!body) return;
+  const collapsed = body.classList.toggle("hidden");
+  els.canvasFiltersToggle.textContent = collapsed ? "+" : "−";
+});
+
+function saveCanvasFilterState() {
+  try {
+    sessionStorage.setItem("storybible.canvas.filters.v1", JSON.stringify([...state.canvasFilterTypes]));
+  } catch {}
+}
+function restoreCanvasFilterState() {
+  try {
+    const raw = sessionStorage.getItem("storybible.canvas.filters.v1");
+    if (!raw) return;
+    const types = JSON.parse(raw);
+    if (Array.isArray(types)) {
+      state.canvasFilterTypes = new Set(types);
+      document.querySelectorAll("[data-filter-type]").forEach(cb => {
+        cb.checked = state.canvasFilterTypes.has(cb.dataset.filterType);
+      });
+    }
+  } catch {}
+}
+
+// Apply current filters to the cy graph by hiding/showing nodes instead
+// of removing them — preserves their saved positions for when they
+// come back into view.
+function applyCanvasFilters() {
+  if (!state.cy) return;
+  const types = state.canvasFilterTypes;
+  const search = state.canvasFilterText;
+  let visible = 0, hidden = 0;
+  state.cy.nodes().forEach(n => {
+    const type = n.data("type");
+    const label = (n.data("label") || "").toLowerCase();
+    const typeOk = types.has(type);
+    const textOk = !search || label.includes(search);
+    const show = typeOk && textOk;
+    n.style("display", show ? "element" : "none");
+    if (show) visible++; else hidden++;
+  });
+  // Hide any edges whose endpoints are hidden
+  state.cy.edges().forEach(e => {
+    const srcVis = e.source().style("display") !== "none";
+    const tgtVis = e.target().style("display") !== "none";
+    e.style("display", (srcVis && tgtVis) ? "element" : "none");
+  });
+  if (els.canvasFilterStats) {
+    els.canvasFilterStats.textContent = hidden > 0
+      ? `${visible} showing · ${hidden} hidden`
+      : `${visible} nodes`;
+  }
+}
 els.storySettingsBtn?.addEventListener("click", () => {
   openStorySettingsModal(state, projectId, {
     onSaved: () => {
@@ -194,6 +279,7 @@ els.storySettingsBtn?.addEventListener("click", () => {
 
 provideStateRef(state);
 provideExtractionStateRef(state);
+restoreCanvasFilterState();
 
 // Unified wrapper for every LLM-driven action. Guarantees the user sees a
 // busy overlay (with cancel), a console trace, and an alert on failure.
@@ -1007,6 +1093,15 @@ function initOrRefreshGraph() {
         hideConnectionEditor();
       }
     });
+    // Persist node positions to Firestore on drag-end so the user's
+    // hand-arranged graph survives page reload, not just session.
+    // Debounced per-node to avoid flooding Firestore on a quick drag.
+    state.cy.on("dragfree", "node", evt => {
+      const node = evt.target;
+      const id = node.id();
+      const pos = node.position();
+      schedulePositionSave(id, { x: pos.x, y: pos.y });
+    });
   }
   rebuildGraphElements();
 }
@@ -1025,10 +1120,23 @@ function rebuildGraphElements() {
   // Capture current positions of existing nodes BEFORE we remove anything.
   // We'll re-apply them when nodes are re-added so the user's hand-arranged
   // graph doesn't shuffle every time they add a card from a note.
+  // Also fall back to positions persisted in Firestore (card.fields.canvasPosition)
+  // so the arrangement survives page reloads.
   const existingPositions = new Map();
   state.cy.nodes().forEach(n => {
     existingPositions.set(n.id(), { ...n.position() });
   });
+  // Layer in persisted positions for any nodes that don't currently have
+  // a session position (i.e. on first render after loadProject).
+  for (const card of state.cards.values()) {
+    if (existingPositions.has(card.id)) continue;
+    const persisted = card.fields?.canvasPosition;
+    if (persisted && typeof persisted.x === "number" && typeof persisted.y === "number") {
+      existingPositions.set(card.id, { x: persisted.x, y: persisted.y });
+    }
+  }
+  // isFirstRender now means "no positions available anywhere" — true only
+  // when this is a brand-new project that's never been laid out.
   const isFirstRender = existingPositions.size === 0;
 
   state.cy.elements().remove();
@@ -1089,6 +1197,13 @@ function rebuildGraphElements() {
       console.log("[graph] first-render layout:", layout.name);
       state.cy.layout(layout).run();
       state.cy.fit(undefined, 40);
+      // Persist the freshly-laid-out positions so the user's next reload
+      // sees the same arrangement (rather than re-running the layout, which
+      // could shuffle things).
+      setTimeout(() => {
+        state.cy.nodes().forEach(n => schedulePositionSave(n.id(), { x: n.position().x, y: n.position().y }));
+      }, 200);
+      applyCanvasFilters();
       return;
     }
 
@@ -1096,6 +1211,7 @@ function rebuildGraphElements() {
       // Pure relabel / restyle — no nodes added, no nodes moved.
       // Don't call fit(); the user's pan/zoom is intentional.
       console.log("[graph] no new nodes — skipping layout");
+      applyCanvasFilters();
       return;
     }
 
@@ -1103,8 +1219,57 @@ function rebuildGraphElements() {
     // the current viewport center with a small spiral spacing so they don't
     // overlap each other or the existing graph too aggressively.
     placeNewNodesNearViewport(newNodeIds);
+    // Persist the newly-placed positions to Firestore so they don't drift
+    // on the next reload.
+    newNodeIds.forEach(id => {
+      const node = state.cy.getElementById(id);
+      if (node && node.length) schedulePositionSave(id, { x: node.position().x, y: node.position().y });
+    });
     console.log("[graph] placed", newNodeIds.length, "new node(s) near viewport center");
+    applyCanvasFilters();
   });
+}
+
+// Force a fresh full-graph auto-layout. Bound to the Relayout button —
+// the only path that intentionally reshuffles all nodes.
+function forceFullLayout() {
+  if (!state.cy) return;
+  const allNodes = state.cy.nodes();
+  const allEdges = state.cy.edges();
+  const layout = chooseLayout(allNodes.length, allEdges.length);
+  console.log("[graph] forced relayout:", layout.name);
+  state.cy.layout(layout).run();
+  state.cy.fit(undefined, 40);
+  // Persist new positions
+  setTimeout(() => {
+    state.cy.nodes().forEach(n => schedulePositionSave(n.id(), { x: n.position().x, y: n.position().y }));
+  }, 200);
+}
+
+// Debounced per-node position persistence to Firestore. Multiple rapid
+// drags of the same node coalesce into one write.
+const positionSaveTimers = new Map();
+function schedulePositionSave(cardId, position) {
+  // Update local state immediately so subsequent rebuilds see the new pos
+  const card = state.cards.get(cardId);
+  if (card) {
+    card.fields = card.fields || {};
+    card.fields.canvasPosition = position;
+  }
+  // Debounce the Firestore write
+  if (positionSaveTimers.has(cardId)) clearTimeout(positionSaveTimers.get(cardId));
+  const timer = setTimeout(async () => {
+    positionSaveTimers.delete(cardId);
+    try {
+      await updateDoc(
+        doc(db, "users", state.user.uid, "projects", projectId, "cards", cardId),
+        { "fields.canvasPosition": position }
+      );
+    } catch (err) {
+      console.warn("[graph] failed to persist position for", cardId, err);
+    }
+  }, 500);
+  positionSaveTimers.set(cardId, timer);
 }
 
 // Position new nodes in a small spiral around the current viewport center
