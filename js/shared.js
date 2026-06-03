@@ -47,7 +47,7 @@ export function formatDate(ts) {
   return d.toLocaleString();
 }
 
-export const CARD_TYPES = ["character", "scene", "beat", "theme", "location", "arc"];
+export const CARD_TYPES = ["character", "scene", "beat", "theme", "concept", "location", "arc"];
 
 export const KANBAN_STAGES = [
   { id: "idea",     label: "Idea" },
@@ -98,6 +98,11 @@ export function blankFieldsForType(type) {
       return { shortDescription: "", longDescription: "", ragSummary: null, ragSummaryStale: false, characterIds: [], locationIds: [], arcIds: [], kanbanStage: "idea", columnId: "", columnOrder: 0 };
     case "theme":
       return { description: "" };
+    case "concept":
+      // Named in-world thing: an event, organization, system, technology,
+      // phenomenon, faction, etc. Distinct from a theme (an abstract idea
+      // the story explores).
+      return { description: "", summary: "", summaryStale: false };
     case "location":
       return { description: "" };
     case "arc":

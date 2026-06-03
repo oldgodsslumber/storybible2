@@ -14,6 +14,7 @@
   --scene: #8a5fb8;
   --beat: #e0b95a;
   --theme: #b88a5f;
+  --concept: #5fb8b8;
   --location: #5fb890;
   --arc: #b8685f;
 }
@@ -183,6 +184,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 .badge.scene { color: var(--scene); border-color: var(--scene); }
 .badge.beat { color: var(--beat); border-color: var(--beat); }
 .badge.theme { color: var(--theme); border-color: var(--theme); }
+.badge.concept { color: var(--concept); border-color: var(--concept); }
 .badge.location { color: var(--location); border-color: var(--location); }
 .badge.arc { color: var(--arc); border-color: var(--arc); }
 

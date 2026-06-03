@@ -18,7 +18,7 @@ import {
   openSceneProposalModal,
   reviewCharacterArc, persistCharacterArcReview
 } from "./review.js";
-import { renderOracle } from "./oracle.js?v=20260603d";
+import { renderOracle } from "./oracle.js?v=20260603e";
 import { openStorySettingsModal, getColumnsForProject, defaultColumnId } from "./story-settings.js";
 import { provideExtractionStateRef } from "./extraction.js";
 import { mountLlmConfigBanner } from "./settings.js?v=20260530";
@@ -629,6 +629,20 @@ async function applyApprovedItems(approved) {
     added++;
     console.log("[apply] added theme", { id: ref.id, name: t.name });
   }
+  for (const c of approved.concepts || []) {
+    if (!c.name) { console.warn("[apply] skipped concept with no name", c); continue; }
+    const data = {
+      type: "concept", title: c.name, archived: false,
+      createdAt: serverTimestamp(), updatedAt: serverTimestamp(), order: 0,
+      fields: { ...blankFieldsForType("concept"), description: c.description || "" }
+    };
+    const ref = await addDoc(cardsCol, data);
+    state.cards.set(ref.id, { id: ref.id, ...data });
+    nameToCardId.set(c.name.toLowerCase(), ref.id);
+    auditBatch.push({ entityType: "card", entityId: ref.id, field: "created", oldValue: null, newValue: { type: "concept", title: c.name, source: c.source } });
+    added++;
+    console.log("[apply] added concept", { id: ref.id, name: c.name });
+  }
   // Resolve column hints for scenes and beats. The LLM might return a
   // column ID, a label, or nonsense — fall back to the default main column
   // when no valid match. columnOrder is max+1 within the chosen column so
@@ -975,6 +989,7 @@ const WIKI_TYPE_ORDER = [
   { type: "beat",      label: "Beats",      plural: "beats" },
   { type: "scene",     label: "Scenes",     plural: "scenes" },
   { type: "arc",       label: "Arcs",       plural: "arcs" },
+  { type: "concept",   label: "Concepts",   plural: "concepts" },
   { type: "theme",     label: "Themes",     plural: "themes" },
   { type: "location",  label: "Locations",  plural: "locations" }
 ];
@@ -1046,6 +1061,7 @@ function renderWikiPage(cardId) {
   else if (card.type === "beat")     bodyHtml = renderWikiBeat(card, f);
   else if (card.type === "arc")      bodyHtml = renderWikiArc(card, f);
   else if (card.type === "theme")    bodyHtml = renderWikiTheme(card, f);
+  else if (card.type === "concept")  bodyHtml = renderWikiConcept(card, f);
   else if (card.type === "location") bodyHtml = renderWikiLocation(card, f);
 
   const crossRefs = renderWikiCrossRefs(card);
@@ -1209,6 +1225,14 @@ function renderWikiTheme(card, f) {
   return f.description
     ? `<section class="wiki-section"><h3>Description</h3>${proseToHtml(f.description)}</section>`
     : `<p class="muted">No description yet.</p>`;
+}
+
+function renderWikiConcept(card, f) {
+  const sections = [];
+  sections.push(`<p class="muted small">A named in-world thing — event, organization, system, phenomenon, faction, or named entity.</p>`);
+  if (f.description) sections.push(`<section class="wiki-section"><h3>Description</h3>${proseToHtml(f.description)}</section>`);
+  if (f.summary)     sections.push(`<section class="wiki-section"><h3>Summary ${f.summaryStale ? '<span class="stale-icon">⚠ stale</span>' : ""}</h3>${proseToHtml(f.summary)}</section>`);
+  return sections.join("") || `<p class="muted">No content yet.</p>`;
 }
 
 function renderWikiLocation(card, f) {
@@ -1459,6 +1483,7 @@ function initOrRefreshGraph() {
         { selector: "node[type='scene']",     style: { "background-color": "#5a3b78", "border-color": "#8a5fb8" } },
         { selector: "node[type='beat']",      style: { "background-color": "#7a652e", "border-color": "#e0b95a", "shape": "diamond", "width": 160, "height": 80 } },
         { selector: "node[type='theme']",     style: { "background-color": "#785a3b", "border-color": "#b88a5f" } },
+        { selector: "node[type='concept']",   style: { "background-color": "#3b7878", "border-color": "#5fb8b8", "shape": "hexagon" } },
         { selector: "node[type='location']",  style: { "background-color": "#3b7860", "border-color": "#5fb890" } },
         { selector: "node[type='arc']",       style: { "background-color": "#78443b", "border-color": "#b8685f" } },
         {
@@ -1518,7 +1543,7 @@ function initOrRefreshGraph() {
 // Cards visible on the Canvas. Scenes are excluded — they live exclusively
 // in the Outline. Beats stay on Canvas too (they're structural anchors that
 // can have relationships) but their primary home is Outline.
-const CANVAS_CARD_TYPES = new Set(["character", "location", "theme", "arc", "beat"]);
+const CANVAS_CARD_TYPES = new Set(["character", "location", "theme", "concept", "arc", "beat"]);
 
 function rebuildGraphElements() {
   if (!state.cy) {
@@ -1905,6 +1930,13 @@ function renderEditor(card) {
     `;
   } else if (card.type === "theme" || card.type === "location") {
     typeSpecific = `<label>Description <textarea data-field="description" rows="3">${esc(f.description)}</textarea></label>`;
+  } else if (card.type === "concept") {
+    const staleTag = f.summaryStale ? ' <span class="stale-icon" title="Stale — re-run Refresh">⚠ stale</span>' : "";
+    typeSpecific = `
+      <p class="muted small editor-type-hint">A named in-world thing — an event, organization, system, phenomenon, faction, etc.</p>
+      <label>Description <textarea data-field="description" rows="4">${esc(f.description)}</textarea></label>
+      <label>Summary${staleTag} <textarea data-field="summary" rows="3">${esc(f.summary)}</textarea></label>
+    `;
   } else if (card.type === "arc") {
     const staleTag = f.summaryStale ? ' <span class="stale-icon" title="Stale — re-run Refresh">⚠ stale</span>' : "";
     typeSpecific = `<label>Summary${staleTag} <textarea data-field="summary" rows="4">${esc(f.summary)}</textarea></label>`;
@@ -1930,6 +1962,8 @@ function renderEditor(card) {
     <div class="editor-actions">
       <button class="ghost small toggle-connect">Connect to…</button>
       ${card.type === "character" ? `<button class="ghost small suggest-traits">Suggest traits…</button>` : ""}
+      ${card.type === "theme" ? `<button class="ghost small convert-theme-to-concept" title="If this isn't actually an abstract idea — convert it to a Concept">↦ Convert to Concept</button>` : ""}
+      ${card.type === "concept" ? `<button class="ghost small convert-concept-to-theme" title="Convert this back to a Theme">↤ Convert to Theme</button>` : ""}
       <button class="ghost small merge-into" title="Merge this card into another of the same type">Merge into…</button>
       <button class="danger small archive-card">Archive</button>
     </div>
@@ -2015,6 +2049,8 @@ function wireEditor(card) {
   els.cardEditor.querySelector(".toggle-connect").addEventListener("click", () => startConnectMode(card.id));
   els.cardEditor.querySelector(".suggest-traits")?.addEventListener("click", () => handleSuggestTraits(card.id));
   els.cardEditor.querySelector(".merge-into")?.addEventListener("click", () => openMergePicker(card.id));
+  els.cardEditor.querySelector(".convert-theme-to-concept")?.addEventListener("click", () => convertCardType(card.id, "theme", "concept"));
+  els.cardEditor.querySelector(".convert-concept-to-theme")?.addEventListener("click", () => convertCardType(card.id, "concept", "theme"));
 }
 
 async function saveTagPicker(cardId, picker) {
@@ -2052,6 +2088,40 @@ async function saveTagPicker(cardId, picker) {
   }], state.project);
   updateRefreshNudge();
   rebuildGraphElements();
+}
+
+// Convert a card between two structurally-similar types (theme ↔ concept).
+// Both have description-as-primary-field, so no data transformation needed;
+// just update the type, mark a stale flag for the new summary field if
+// going theme → concept (concept has summary, theme doesn't), and refresh
+// any view that displays the card.
+async function convertCardType(cardId, fromType, toType) {
+  const card = state.cards.get(cardId);
+  if (!card || card.type !== fromType) return;
+  if (!confirm(`Convert "${card.title}" from ${fromType} to ${toType}?\n\n${toType === "concept"
+    ? "Concepts are named in-world things (events, organizations, systems). The description carries over."
+    : "Themes are abstract philosophical ideas the story explores. The description carries over; concept-specific summary fields are kept but no longer surfaced as prominently."}`)) return;
+  const oldType = card.type;
+  card.type = toType;
+  // If switching to concept, ensure summary fields exist
+  if (toType === "concept" && card.fields && card.fields.summary === undefined) {
+    card.fields.summary = "";
+    card.fields.summaryStale = !!card.fields.description; // mark stale if there's description content waiting for a summary
+  }
+  const updates = { type: toType, updatedAt: serverTimestamp() };
+  if (toType === "concept") {
+    if (card.fields.summary === "") updates["fields.summary"] = "";
+    updates["fields.summaryStale"] = !!card.fields.description;
+  }
+  await updateDoc(doc(db, "users", state.user.uid, "projects", projectId, "cards", cardId), updates);
+  await logAudit(state.user.uid, projectId, [{
+    entityType: "card", entityId: cardId, field: "type", oldValue: oldType, newValue: toType
+  }], state.project);
+  await touchProject();
+  rebuildGraphElements();
+  if (els.wikiView && !els.wikiView.classList.contains("hidden")) renderWiki();
+  // Re-open editor with new type so the user sees the updated UI
+  openCardEditor(cardId);
 }
 
 async function handleSuggestTraits(cardId) {

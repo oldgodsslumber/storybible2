@@ -40,6 +40,7 @@ Return ONLY a JSON object with this exact shape:
   "characters": [{"name": "...", "role": "", "traits": [], "history": [], "source": "extraction|inference", "rationale": "one short sentence"}],
   "locations":  [{"name": "...", "description": "", "source": "extraction|inference", "rationale": "..."}],
   "themes":     [{"name": "...", "description": "", "source": "extraction|inference", "rationale": "..."}],
+  "concepts":   [{"name": "...", "description": "", "source": "extraction|inference", "rationale": "..."}],
   "scenes":     [{"name": "...", "shortDescription": "...", "longDescription": "", "columnHint": "act-1|prologue|...", "source": "extraction|inference", "rationale": "..."}],
   "beats":      [{"name": "...", "description": "...", "structurePosition": "Inciting Incident|Midpoint|Climax|...", "columnHint": "act-1|prologue|...", "source": "extraction|inference", "rationale": "..."}],
   "storySettings": {
@@ -68,9 +69,16 @@ COVERAGE — be THOROUGH. Capture EVERY entity, update, and connection the write
 A SCENE is the smallest unit — one continuous moment in one location. ("Jack confronts Sara on the rooftop" → scene.)
 A BEAT is a structural moment between a single scene and an ongoing subplot — "the inciting incident", "the midpoint", "the climax", "Act 2 turn". If the writer describes a major plot pivot that organizes several scenes (rather than a single moment-to-moment scene), propose it as a beat with a structurePosition tag.
 
+THEME vs CONCEPT distinction (CRITICAL):
+  - A THEME is an abstract philosophical or narrative idea the story explores ("identity", "loss", "what makes a family", "the cost of survival"). Themes are questions, not things.
+  - A CONCEPT is a named in-world thing — an event, organization, system, technology, phenomenon, faction, ritual, or proper-noun entity that exists within the story world. Examples: "Curtain Fall", "the Iron Council", "the Drift", "Memory Tax", "the Veil".
+  - If the writer mentions a proper noun, an ALL-CAPS term, or a specific named thing that's part of the setting, it's a CONCEPT, not a theme.
+  - If the writer mentions an abstract idea the characters wrestle with, it's a THEME.
+
 DEDUPLICATION — MOST IMPORTANT RULE:
-For themes, characters, locations, and beats, SEMANTIC match matters more than exact-name match. Before proposing a NEW entity, check the existing entities list. If your candidate means essentially the same thing as an existing one — even with a different name — propose an UPDATE to the existing one instead of a new entity. Examples:
+For themes, concepts, characters, locations, and beats, SEMANTIC match matters more than exact-name match. Before proposing a NEW entity, check the existing entities list. If your candidate means essentially the same thing as an existing one — even with a different name — propose an UPDATE to the existing one instead of a new entity. Examples:
   - Existing theme "identity" — note mentions "national identity" → UPDATE the existing theme; don't create a new one.
+  - Existing concept "Curtain Fall" — note mentions "the storm" → UPDATE Curtain Fall's description; don't add a separate "storm" concept.
   - Existing character "Sara Vasquez" — note mentions "Sara V." → UPDATE Sara Vasquez; don't create a separate Sara V.
   - Existing location "the dam" — note mentions "Hoover Dam" → UPDATE the existing one (perhaps proposing it be renamed) rather than adding a duplicate.
 A new entity is only justified when no existing entity captures the same concept. Err on the side of UPDATES — duplicates poison the story bible and the writer hates them.
@@ -84,9 +92,10 @@ Return ONLY this JSON shape:
   "newCharacters": [{"name": "...", "role": "", "traits": [], "history": [], "source": "extraction|inference", "rationale": "..."}],
   "newLocations":  [{"name": "...", "description": "", "source": "extraction|inference", "rationale": "..."}],
   "newThemes":     [{"name": "...", "description": "", "source": "extraction|inference", "rationale": "..."}],
+  "newConcepts":   [{"name": "...", "description": "", "source": "extraction|inference", "rationale": "..."}],
   "newScenes":     [{"name": "...", "shortDescription": "...", "longDescription": "", "columnHint": "act-1|prologue|...", "source": "extraction|inference", "rationale": "..."}],
   "newBeats":      [{"name": "...", "description": "...", "structurePosition": "...", "columnHint": "act-1|prologue|...", "source": "extraction|inference", "rationale": "..."}],
-  "updates":       [{"entityName": "...", "entityType": "character|location|theme|beat|scene", "field": "traits|history|role|description|structurePosition|shortDescription|longDescription", "addValue": "string or bullet text", "source": "extraction|inference", "rationale": "..."}],
+  "updates":       [{"entityName": "...", "entityType": "character|location|theme|concept|beat|scene", "field": "traits|history|role|description|structurePosition|shortDescription|longDescription", "addValue": "string or bullet text", "source": "extraction|inference", "rationale": "..."}],
   "storySettings": {
     "genre":   {"value": "...", "source": "extraction|inference", "rationale": "..."},
     "premise": {"value": "...", "source": "extraction|inference", "rationale": "..."},
@@ -224,11 +233,12 @@ export function openApprovalModal(parsed, { title = "Review extracted items", on
 }
 
 function collectApprovalItems(parsed) {
-  // Normalize either idea-dump shape (characters/locations/themes/scenes/beats/connections)
-  // or note-parse shape (newCharacters/newLocations/newThemes/newScenes/newBeats/updates/connections).
+  // Normalize either idea-dump shape (characters/locations/themes/concepts/scenes/beats/connections)
+  // or note-parse shape (newCharacters/newLocations/newThemes/newConcepts/newScenes/newBeats/updates/connections).
   const characters = parsed.characters || parsed.newCharacters || [];
   const locations  = parsed.locations  || parsed.newLocations  || [];
   const themes     = parsed.themes     || parsed.newThemes     || [];
+  const concepts   = parsed.concepts   || parsed.newConcepts   || [];
   const scenes     = parsed.scenes     || parsed.newScenes     || [];
   const beats      = parsed.beats      || parsed.newBeats      || [];
   const updates    = parsed.updates    || [];
@@ -264,11 +274,11 @@ function collectApprovalItems(parsed) {
       rationale: a.rationale || ""
     });
   }
-  return { characters, locations, themes, scenes, beats, updates, connections, storySettings };
+  return { characters, locations, themes, concepts, scenes, beats, updates, connections, storySettings };
 }
 
 function emptyApproved() {
-  return { characters: [], locations: [], themes: [], scenes: [], beats: [], updates: [], connections: [], storySettings: [] };
+  return { characters: [], locations: [], themes: [], concepts: [], scenes: [], beats: [], updates: [], connections: [], storySettings: [] };
 }
 
 function renderApproval(container, state) {
@@ -280,6 +290,7 @@ function renderApproval(container, state) {
     { key: "scenes",        label: "Scenes",         render: renderScene },
     { key: "locations",     label: "Locations",      render: renderLocation },
     { key: "themes",        label: "Themes",         render: renderTheme },
+    { key: "concepts",      label: "Concepts (named in-world things)", render: renderConcept },
     { key: "updates",       label: "Updates to existing cards", render: renderUpdate },
     { key: "connections",   label: "Connections",    render: renderConnection }
   ];
@@ -339,6 +350,10 @@ function renderLocation(l) {
 function renderTheme(t) {
   return `<div class="approval-name"><strong>${esc(t.name)}</strong></div>
           ${t.description ? `<div class="small muted">${esc(t.description)}</div>` : ""}`;
+}
+function renderConcept(c) {
+  return `<div class="approval-name"><strong>${esc(c.name)}</strong></div>
+          ${c.description ? `<div class="small muted">${esc(c.description)}</div>` : ""}`;
 }
 function renderBeat(b) {
   const col = b.columnHint ? ` → column ${esc(b.columnHint)}` : "";

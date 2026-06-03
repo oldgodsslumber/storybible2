@@ -134,6 +134,7 @@ body { display: flex; flex-direction: column; height: 100vh; }
 .canvas-filter-swatch.char { background: var(--character); }
 .canvas-filter-swatch.loc  { background: var(--location); }
 .canvas-filter-swatch.thm  { background: var(--theme); }
+.canvas-filter-swatch.con  { background: var(--concept); }
 .canvas-filter-swatch.arc  { background: var(--arc); }
 .canvas-filter-swatch.beat { background: var(--beat); }
 .canvas-filters-body input[type=search] {
