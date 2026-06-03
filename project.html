@@ -18,6 +18,7 @@
       <button data-view="graph" class="tab active">Canvas</button>
       <button data-view="outline" class="tab">Outline</button>
       <button data-view="review" class="tab">Review</button>
+      <button data-view="wiki" class="tab">Wiki</button>
       <button data-view="kanban" class="tab">Kanban</button>
       <button data-view="oracle" class="tab">Oracle</button>
       <button data-view="archive" class="tab">Archive</button>
@@ -179,6 +180,7 @@
         <ul class="mobile-more-list">
           <li><button data-mobile-action="story-settings">📖 Story Settings</button></li>
           <li><button data-mobile-action="refresh">↻ Global Refresh</button></li>
+          <li><button data-mobile-action="wiki">Wiki</button></li>
           <li><button data-mobile-action="kanban">Kanban</button></li>
           <li><button data-mobile-action="oracle">Oracle</button></li>
           <li><button data-mobile-action="archive">Archive</button></li>
@@ -195,6 +197,21 @@
     <!-- Connection editor (floating; opens when a graph edge is clicked) -->
     <div id="connectionEditor" class="card-editor connection-editor hidden"></div>
 
+    <!-- WIKI VIEW -->
+    <section id="wikiView" class="view hidden">
+      <aside class="wiki-sidebar">
+        <input id="wikiSearch" type="search" placeholder="Search cards…" />
+        <div id="wikiCardList" class="wiki-card-list"></div>
+      </aside>
+      <main class="wiki-content">
+        <div id="wikiContentEmpty" class="wiki-empty muted">
+          <h2>Wiki</h2>
+          <p>Pick a card from the left to read its full page — characters, scenes, beats, locations, themes, and arcs are all browsable here as cross-linked reference pages.</p>
+        </div>
+        <article id="wikiContent" class="wiki-article hidden"></article>
+      </main>
+    </section>
+
     <!-- ARCHIVE VIEW -->
     <section id="archiveView" class="view hidden">
       <h2>Archive</h2>
@@ -204,6 +221,6 @@
     </section>
   </main>
 
-  <script type="module" src="./js/project.js?v=20260603b"></script>
+  <script type="module" src="./js/project.js?v=20260603c"></script>
 </body>
 </html>

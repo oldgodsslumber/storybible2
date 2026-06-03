@@ -17,7 +17,7 @@ import {
   suggestTraits, applyTraitSuggestions, openTraitSuggestModal,
   openSceneProposalModal
 } from "./review.js";
-import { renderOracle } from "./oracle.js?v=20260603b";
+import { renderOracle } from "./oracle.js?v=20260603c";
 import { openStorySettingsModal, getColumnsForProject, defaultColumnId } from "./story-settings.js";
 import { provideExtractionStateRef } from "./extraction.js";
 import { mountLlmConfigBanner } from "./settings.js?v=20260530";
@@ -48,6 +48,12 @@ const els = {
   kanbanView: document.getElementById("kanbanView"),
   kanbanBoard: document.getElementById("kanbanBoard"),
   oracleView: document.getElementById("oracleView"),
+  wikiView: document.getElementById("wikiView"),
+  wikiSidebar: document.querySelector(".wiki-sidebar"),
+  wikiSearch: document.getElementById("wikiSearch"),
+  wikiCardList: document.getElementById("wikiCardList"),
+  wikiContent: document.getElementById("wikiContent"),
+  wikiContentEmpty: document.getElementById("wikiContentEmpty"),
   cardEditor: document.getElementById("cardEditor"),
   refreshBtn: document.getElementById("refreshBtn"),
   refreshBadge: document.getElementById("refreshBadge"),
@@ -157,6 +163,7 @@ els.mobileMoreList?.querySelectorAll("button[data-mobile-action]").forEach(btn =
       case "back-dashboard":
         window.location.href = "./index.html";
         break;
+      case "wiki":
       case "kanban":
       case "oracle":
       case "archive":
@@ -901,6 +908,7 @@ function switchView(name) {
   hide(els.kanbanView);
   hide(els.oracleView);
   hide(els.captureView);
+  hide(els.wikiView);
   hideCardEditor();
 
   // Strip outline-only chrome (beat spine, prologue/epilogue sections) when
@@ -933,10 +941,344 @@ function switchView(name) {
   } else if (name === "oracle") {
     show(els.oracleView);
     renderOracle(els.oracleView);
+  } else if (name === "wiki") {
+    show(els.wikiView);
+    renderWiki();
   } else if (name === "archive") {
     show(els.archiveView);
     renderArchive();
   }
+}
+
+// --- Wiki view ---
+
+let wikiSelectedCardId = null;
+
+function renderWiki() {
+  renderWikiSidebar();
+  if (wikiSelectedCardId && state.cards.has(wikiSelectedCardId) && !state.cards.get(wikiSelectedCardId).archived) {
+    renderWikiPage(wikiSelectedCardId);
+  } else {
+    wikiSelectedCardId = null;
+    showWikiEmpty();
+  }
+  // Wire search input on first render
+  if (els.wikiSearch && !els.wikiSearch.dataset.wired) {
+    els.wikiSearch.dataset.wired = "1";
+    els.wikiSearch.addEventListener("input", renderWikiSidebar);
+  }
+}
+
+const WIKI_TYPE_ORDER = [
+  { type: "character", label: "Characters", plural: "characters" },
+  { type: "beat",      label: "Beats",      plural: "beats" },
+  { type: "scene",     label: "Scenes",     plural: "scenes" },
+  { type: "arc",       label: "Arcs",       plural: "arcs" },
+  { type: "theme",     label: "Themes",     plural: "themes" },
+  { type: "location",  label: "Locations",  plural: "locations" }
+];
+
+function renderWikiSidebar() {
+  if (!els.wikiCardList) return;
+  const q = (els.wikiSearch?.value || "").trim().toLowerCase();
+  els.wikiCardList.innerHTML = "";
+  let anyVisible = false;
+  for (const group of WIKI_TYPE_ORDER) {
+    const cards = [...state.cards.values()]
+      .filter(c => c.type === group.type && !c.archived)
+      .filter(c => !q || c.title.toLowerCase().includes(q))
+      .sort((a, b) => a.title.localeCompare(b.title));
+    if (cards.length === 0) continue;
+    anyVisible = true;
+    const sec = document.createElement("details");
+    sec.className = "wiki-group";
+    sec.open = true;
+    sec.innerHTML = `
+      <summary class="wiki-group-summary">
+        <span class="wiki-group-caret">▶</span>
+        <span class="wiki-group-title">${esc(group.label)}</span>
+        <span class="wiki-group-count muted small">${cards.length}</span>
+      </summary>
+      <ul class="wiki-group-list"></ul>
+    `;
+    const ul = sec.querySelector(".wiki-group-list");
+    for (const card of cards) {
+      const li = document.createElement("li");
+      li.className = "wiki-card-link" + (card.id === wikiSelectedCardId ? " active" : "");
+      li.innerHTML = `
+        <span class="badge ${esc(card.type)}">${esc(card.type)}</span>
+        <span class="wiki-card-name">${esc(card.title || "(untitled)")}</span>
+      `;
+      li.addEventListener("click", () => {
+        wikiSelectedCardId = card.id;
+        renderWikiSidebar();
+        renderWikiPage(card.id);
+      });
+      ul.appendChild(li);
+    }
+    els.wikiCardList.appendChild(sec);
+  }
+  if (!anyVisible) {
+    els.wikiCardList.innerHTML = `<p class="muted small">${q ? `No cards match "${esc(q)}"` : "No cards yet — create some from the Canvas or via note processing."}</p>`;
+  }
+}
+
+function showWikiEmpty() {
+  if (els.wikiContent) {
+    els.wikiContent.classList.add("hidden");
+    els.wikiContent.innerHTML = "";
+  }
+  if (els.wikiContentEmpty) els.wikiContentEmpty.classList.remove("hidden");
+}
+
+function renderWikiPage(cardId) {
+  const card = state.cards.get(cardId);
+  if (!card || card.archived) { showWikiEmpty(); return; }
+  if (!els.wikiContent) return;
+  els.wikiContentEmpty?.classList.add("hidden");
+  els.wikiContent.classList.remove("hidden");
+
+  const f = card.fields || {};
+  let bodyHtml = "";
+  if (card.type === "character")     bodyHtml = renderWikiCharacter(card, f);
+  else if (card.type === "scene")    bodyHtml = renderWikiScene(card, f);
+  else if (card.type === "beat")     bodyHtml = renderWikiBeat(card, f);
+  else if (card.type === "arc")      bodyHtml = renderWikiArc(card, f);
+  else if (card.type === "theme")    bodyHtml = renderWikiTheme(card, f);
+  else if (card.type === "location") bodyHtml = renderWikiLocation(card, f);
+
+  const crossRefs = renderWikiCrossRefs(card);
+
+  els.wikiContent.innerHTML = `
+    <header class="wiki-article-head">
+      <div class="wiki-article-meta">
+        <span class="badge ${esc(card.type)}">${esc(card.type)}</span>
+        ${f.role ? `<span class="wiki-article-role muted small">${esc(f.role)}</span>` : ""}
+        ${f.structurePosition ? `<span class="wiki-article-role muted small">${esc(f.structurePosition)}</span>` : ""}
+      </div>
+      <h1>${esc(card.title || "(untitled)")}</h1>
+      <div class="wiki-article-actions">
+        <button class="ghost small" data-wiki-edit>✎ Edit card</button>
+      </div>
+    </header>
+    <div class="wiki-article-body">
+      ${bodyHtml}
+      ${crossRefs}
+    </div>
+  `;
+  els.wikiContent.querySelector("[data-wiki-edit]")?.addEventListener("click", () => {
+    openCardEditor(cardId);
+  });
+  // Wire any cross-reference links to navigate within the wiki
+  els.wikiContent.querySelectorAll("[data-wiki-link]").forEach(a => {
+    a.addEventListener("click", e => {
+      e.preventDefault();
+      const id = a.dataset.wikiLink;
+      if (state.cards.has(id) && !state.cards.get(id).archived) {
+        wikiSelectedCardId = id;
+        renderWikiSidebar();
+        renderWikiPage(id);
+        els.wikiContent.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    });
+  });
+}
+
+function renderWikiCharacter(card, f) {
+  const sections = [];
+  if (f.physicalDescription || f.age) {
+    sections.push(`
+      <section class="wiki-section">
+        <h3>Description</h3>
+        ${f.age ? `<p class="muted small">Age: ${esc(f.age)}</p>` : ""}
+        ${f.physicalDescription ? `<p>${esc(f.physicalDescription)}</p>` : ""}
+      </section>
+    `);
+  }
+  if (Array.isArray(f.traits) && f.traits.length) {
+    sections.push(`
+      <section class="wiki-section">
+        <h3>Traits</h3>
+        <ul>${f.traits.map(t => `<li>${esc(t)}</li>`).join("")}</ul>
+      </section>
+    `);
+  }
+  if (Array.isArray(f.history) && f.history.length) {
+    sections.push(`
+      <section class="wiki-section">
+        <h3>History</h3>
+        <ul>${f.history.map(t => `<li>${esc(t)}</li>`).join("")}</ul>
+      </section>
+    `);
+  }
+  if (f.storyRoleSummary) {
+    sections.push(`
+      <section class="wiki-section">
+        <h3>Story role ${f.storyRoleSummaryStale ? '<span class="stale-icon" title="Refresh recommended">⚠ stale</span>' : ""}</h3>
+        ${proseToHtml(f.storyRoleSummary)}
+      </section>
+    `);
+  }
+  return sections.join("") || `<p class="muted">No details yet. Open the editor to fill in this character.</p>`;
+}
+
+function renderWikiScene(card, f) {
+  const sections = [];
+  if (f.shortDescription) sections.push(`<section class="wiki-section"><h3>Short description</h3><p>${esc(f.shortDescription)}</p></section>`);
+  if (f.longDescription)  sections.push(`<section class="wiki-section"><h3>Long description</h3>${proseToHtml(f.longDescription)}</section>`);
+  if (f.ragSummary)       sections.push(`<section class="wiki-section"><h3>Summary ${f.ragSummaryStale ? '<span class="stale-icon">⚠ stale</span>' : ""}</h3>${proseToHtml(f.ragSummary)}</section>`);
+
+  // Tagged people / places / arcs
+  const tagSections = [];
+  if (Array.isArray(f.characterIds) && f.characterIds.length) {
+    tagSections.push(`<div class="wiki-tag-block"><h4>Characters</h4>${cardLinkList(f.characterIds)}</div>`);
+  }
+  if (Array.isArray(f.locationIds) && f.locationIds.length) {
+    tagSections.push(`<div class="wiki-tag-block"><h4>Locations</h4>${cardLinkList(f.locationIds)}</div>`);
+  }
+  if (Array.isArray(f.arcIds) && f.arcIds.length) {
+    tagSections.push(`<div class="wiki-tag-block"><h4>Arcs</h4>${cardLinkList(f.arcIds)}</div>`);
+  }
+  if (tagSections.length) {
+    sections.push(`<section class="wiki-section"><h3>Tagged</h3><div class="wiki-tag-grid">${tagSections.join("")}</div></section>`);
+  }
+  return sections.join("") || `<p class="muted">No content yet.</p>`;
+}
+
+function renderWikiBeat(card, f) {
+  const sections = [];
+  if (f.description) sections.push(`<section class="wiki-section"><h3>Description</h3>${proseToHtml(f.description)}</section>`);
+  if (f.summary)     sections.push(`<section class="wiki-section"><h3>Summary ${f.summaryStale ? '<span class="stale-icon">⚠ stale</span>' : ""}</h3>${proseToHtml(f.summary)}</section>`);
+  if (Array.isArray(f.relatedSceneIds) && f.relatedSceneIds.length) {
+    sections.push(`<section class="wiki-section"><h3>Scenes that implement this beat</h3>${cardLinkList(f.relatedSceneIds)}</section>`);
+  }
+  if (Array.isArray(f.relatedArcIds) && f.relatedArcIds.length) {
+    sections.push(`<section class="wiki-section"><h3>Arcs this beat advances</h3>${cardLinkList(f.relatedArcIds)}</section>`);
+  }
+  return sections.join("") || `<p class="muted">No content yet.</p>`;
+}
+
+function renderWikiArc(card, f) {
+  const summary = f.summary
+    ? `<section class="wiki-section"><h3>Summary ${f.summaryStale ? '<span class="stale-icon">⚠ stale</span>' : ""}</h3>${proseToHtml(f.summary)}</section>`
+    : "";
+  // Scenes tagged with this arc
+  const scenesInArc = [...state.cards.values()].filter(
+    c => c.type === "scene" && !c.archived && (c.fields?.arcIds || []).includes(card.id)
+  );
+  const scenesSection = scenesInArc.length
+    ? `<section class="wiki-section"><h3>Scenes tagged with this arc</h3>${cardLinkList(scenesInArc.map(s => s.id))}</section>`
+    : "";
+  return (summary + scenesSection) || `<p class="muted">No content yet.</p>`;
+}
+
+function renderWikiTheme(card, f) {
+  return f.description
+    ? `<section class="wiki-section"><h3>Description</h3>${proseToHtml(f.description)}</section>`
+    : `<p class="muted">No description yet.</p>`;
+}
+
+function renderWikiLocation(card, f) {
+  return f.description
+    ? `<section class="wiki-section"><h3>Description</h3>${proseToHtml(f.description)}</section>`
+    : `<p class="muted">No description yet.</p>`;
+}
+
+// "References" section — outgoing and incoming connections + reverse
+// tag lookups (e.g. "appears in scenes" for a character).
+function renderWikiCrossRefs(card) {
+  const sections = [];
+
+  // Outgoing connections (this card → others)
+  const outgoing = [...state.connections.values()].filter(c => c.fromCardId === card.id);
+  if (outgoing.length) {
+    sections.push(`
+      <section class="wiki-section">
+        <h3>Connections</h3>
+        <ul class="wiki-conn-list">
+          ${outgoing.map(c => `<li><strong>${esc(c.label || "linked to")}</strong> → ${cardLink(c.toCardId)}</li>`).join("")}
+        </ul>
+      </section>
+    `);
+  }
+  // Incoming connections (others → this card)
+  const incoming = [...state.connections.values()].filter(c => c.toCardId === card.id);
+  if (incoming.length) {
+    sections.push(`
+      <section class="wiki-section">
+        <h3>Referenced from</h3>
+        <ul class="wiki-conn-list">
+          ${incoming.map(c => `<li>${cardLink(c.fromCardId)} → <em>${esc(c.label || "linked")}</em></li>`).join("")}
+        </ul>
+      </section>
+    `);
+  }
+
+  // Reverse lookups for characters/locations/arcs: which scenes tag this card
+  if (card.type === "character" || card.type === "location" || card.type === "arc") {
+    const field = card.type === "character" ? "characterIds" : card.type === "location" ? "locationIds" : "arcIds";
+    const taggingScenes = [...state.cards.values()].filter(
+      c => c.type === "scene" && !c.archived && (c.fields?.[field] || []).includes(card.id)
+    );
+    if (taggingScenes.length) {
+      const heading = card.type === "character" ? "Scenes featuring this character"
+                    : card.type === "location"  ? "Scenes set in this location"
+                    : "Scenes tagged with this arc";
+      sections.push(`
+        <section class="wiki-section">
+          <h3>${heading}</h3>
+          ${cardLinkList(taggingScenes.map(s => s.id))}
+        </section>
+      `);
+    }
+  }
+
+  // For arcs: also show beats that advance this arc
+  if (card.type === "arc") {
+    const beatsForArc = [...state.cards.values()].filter(
+      c => c.type === "beat" && !c.archived && (c.fields?.relatedArcIds || []).includes(card.id)
+    );
+    if (beatsForArc.length) {
+      sections.push(`
+        <section class="wiki-section">
+          <h3>Beats that advance this arc</h3>
+          ${cardLinkList(beatsForArc.map(b => b.id))}
+        </section>
+      `);
+    }
+  }
+
+  // For scenes: which beat (if any) groups this scene
+  if (card.type === "scene") {
+    const parentBeat = [...state.cards.values()].find(
+      c => c.type === "beat" && !c.archived && (c.fields?.relatedSceneIds || []).includes(card.id)
+    );
+    if (parentBeat) {
+      sections.push(`
+        <section class="wiki-section">
+          <h3>Implements beat</h3>
+          ${cardLinkList([parentBeat.id])}
+        </section>
+      `);
+    }
+  }
+
+  return sections.join("");
+}
+
+function cardLink(cardId) {
+  const c = state.cards.get(cardId);
+  if (!c) return `<span class="muted small">(missing card)</span>`;
+  const archived = c.archived ? ` <span class="muted small">(archived)</span>` : "";
+  return `<a href="#" data-wiki-link="${attr(cardId)}" class="wiki-link"><span class="badge ${esc(c.type)}">${esc(c.type)}</span>${esc(c.title || "(untitled)")}</a>${archived}`;
+}
+function cardLinkList(ids) {
+  if (!ids.length) return "";
+  return `<ul class="wiki-link-list">${ids.map(id => `<li>${cardLink(id)}</li>`).join("")}</ul>`;
+}
+
+function proseToHtml(text) {
+  return esc(text).split(/\n\s*\n/).map(p => `<p>${p.replace(/\n/g, "<br/>")}</p>`).join("");
 }
 
 // --- Kanban ---
