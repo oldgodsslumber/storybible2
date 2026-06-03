@@ -11,7 +11,7 @@ import {
 export const DEFAULT_STORY_SETTINGS = {
   genre: "",
   premise: "",
-  structure: "5-act",
+  structure: "story-bible-default",
   voiceNotes: "",
   anchorConcepts: [], // [{ term, definition }]
   prologue: "",       // diegetic but outside the main story arc; backstory framing
@@ -19,6 +19,7 @@ export const DEFAULT_STORY_SETTINGS = {
 };
 
 export const STRUCTURE_OPTIONS = [
+  { id: "story-bible-default", label: "Story Bible default (Prologue / Act I / Act II / Mid-Point / Crisis / Climax / Act III / Epilogue)" },
   { id: "free",          label: "No specific structure" },
   { id: "3-act",         label: "3-act (Setup / Confrontation / Resolution)" },
   { id: "5-act",         label: "5-act (Exposition / Rising / Climax / Falling / Denouement)" },
@@ -34,25 +35,120 @@ export const STRUCTURE_COLUMNS = {
   "free":          ["Story"],
   "3-act":         ["Act 1: Setup", "Act 2: Confrontation", "Act 3: Resolution"],
   "5-act":         ["Act 1: Exposition", "Act 2: Rising Action", "Act 3: Climax", "Act 4: Falling Action", "Act 5: Denouement"],
+  "story-bible-default": ["Act I", "Act II", "Mid-Point", "Crisis", "Climax", "Act III"],
   "save-the-cat":  ["Setup", "Catalyst → Break Into Two", "Break Into Two → Midpoint", "Midpoint → All Is Lost", "All Is Lost → Finale", "Finale"],
   "heros-journey": ["Departure", "Initiation", "Return"],
   "kishotenketsu": ["Ki (Intro)", "Shō (Development)", "Ten (Twist)", "Ketsu (Conclusion)"]
 };
 
+// Per-column writing guidance for structures that have it. Keyed by
+// structure id, then by column id (prologue / act-1 / act-2 / ... / epilogue).
+// Each entry has a short one-line description plus a list of bullet
+// guidance questions the writer can use as prompts while filling the column.
+export const STRUCTURE_COLUMN_GUIDANCE = {
+  "story-bible-default": {
+    "prologue": {
+      description: "Introduces your film's tone through a scene not connected to the main plot.",
+      guidance: [
+        "Should exist outside the plot of the film.",
+        "Doesn't need to necessarily involve the main characters.",
+        "Good in Action/Horror films — sets the tone quickly."
+      ]
+    },
+    "act-1": {
+      description: "Introduce the characters in their \"normal world\".",
+      guidance: [
+        "What does their world look like?",
+        "Who are their relationships with?",
+        "What is comfortable and uncomfortable in their \"normal\" world?",
+        "How is your theme expressed in the \"normal world\"?"
+      ]
+    },
+    "act-2": {
+      description: "Characters attempt to overcome obstacles that directly relate to their goal.",
+      guidance: [
+        "How are these obstacles expressions of theme?",
+        "How do the characters respond to these obstacles? How does that also express theme?"
+      ]
+    },
+    "act-3": {
+      description: "Your characters are now at a moment of calm, after some successes and failures.",
+      guidance: [
+        "In this moment of calm, how do we see the character reacting to the events in Act II?",
+        "How has Act II affected the characters?",
+        "What else has changed in the world?"
+      ]
+    },
+    "act-4": {
+      description: "Circumstances plunge yet again, and things become much worse. As bad as they can be.",
+      guidance: [
+        "How do things get even worse?",
+        "How does this penultimate challenge relate to the theme?",
+        "What lesson does your character learn related to theme?"
+      ]
+    },
+    "act-5": {
+      description: "Your character now heads into their final challenge, lessons learned.",
+      guidance: [
+        "How do they use their new knowledge or skill to confront the challenge?",
+        "Do they win? Or do they lose?",
+        "How do you continue to ratchet tension?"
+      ]
+    },
+    "act-6": {
+      description: "The central conflict is either won or lost. Characters return to their \"normal world\", now changed.",
+      guidance: [
+        "What is the appropriate ending for this theme?",
+        "What does this new world look like?",
+        "How do the lessons learned via Climax impact them in the \"normal world\"?"
+      ]
+    },
+    "epilogue": {
+      description: "A post-storyline scene that resolves a hanging thread, or introduces a new conflict for the next film/installment.",
+      guidance: [
+        "What threads are not concluded?",
+        "What needs to be appropriately teased for the next installment?"
+      ]
+    }
+  }
+};
+
 // Returns the ordered list of outline columns for a project:
-// [ {id, label, isPrologue, isEpilogue, isMain} ]
+// [ {id, label, isPrologue, isEpilogue, isMain, description, guidance} ]
 // IDs are stable (prologue, act-1..act-N, epilogue) so cards don't lose
 // their column on a structure change unless the column count shrinks
 // past their index — in which case they end up "Unassigned".
+// description and guidance are attached when the chosen structure has
+// per-column writing guidance defined (currently only "story-bible-default").
 export function getColumnsForProject(project) {
   const s = getStorySettings(project);
   const mainLabels = STRUCTURE_COLUMNS[s.structure] || STRUCTURE_COLUMNS["5-act"];
+  const guidance = STRUCTURE_COLUMN_GUIDANCE[s.structure] || {};
   const cols = [];
-  cols.push({ id: "prologue", label: "Prologue", isPrologue: true, isMain: false, isEpilogue: false });
-  mainLabels.forEach((label, idx) => {
-    cols.push({ id: `act-${idx + 1}`, label, isPrologue: false, isMain: true, isEpilogue: false });
+  const proInfo = guidance["prologue"] || {};
+  cols.push({
+    id: "prologue", label: "Prologue",
+    isPrologue: true, isMain: false, isEpilogue: false,
+    description: proInfo.description || "",
+    guidance: proInfo.guidance || []
   });
-  cols.push({ id: "epilogue", label: "Epilogue", isPrologue: false, isMain: false, isEpilogue: true });
+  mainLabels.forEach((label, idx) => {
+    const colId = `act-${idx + 1}`;
+    const info = guidance[colId] || {};
+    cols.push({
+      id: colId, label,
+      isPrologue: false, isMain: true, isEpilogue: false,
+      description: info.description || "",
+      guidance: info.guidance || []
+    });
+  });
+  const epiInfo = guidance["epilogue"] || {};
+  cols.push({
+    id: "epilogue", label: "Epilogue",
+    isPrologue: false, isMain: false, isEpilogue: true,
+    description: epiInfo.description || "",
+    guidance: epiInfo.guidance || []
+  });
   return cols;
 }
 

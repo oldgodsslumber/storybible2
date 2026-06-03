@@ -17,7 +17,7 @@ import {
   suggestTraits, applyTraitSuggestions, openTraitSuggestModal,
   openSceneProposalModal
 } from "./review.js";
-import { renderOracle } from "./oracle.js?v=20260602c";
+import { renderOracle } from "./oracle.js?v=20260603";
 import { openStorySettingsModal, getColumnsForProject, defaultColumnId } from "./story-settings.js";
 import { provideExtractionStateRef } from "./extraction.js";
 import { mountLlmConfigBanner } from "./settings.js?v=20260530";
@@ -1832,10 +1832,34 @@ function renderColumn(col, cards) {
 
   const head = document.createElement("header");
   head.className = "outline-col-head";
+  const hasGuidance = (col.description && col.description.length > 0) || (Array.isArray(col.guidance) && col.guidance.length > 0);
   head.innerHTML = `
-    <h3>${esc(col.label)}</h3>
-    <span class="muted small">${cards.length} card${cards.length === 1 ? "" : "s"}</span>
+    <div class="outline-col-head-top">
+      <h3>${esc(col.label)}</h3>
+      ${hasGuidance ? `<button class="outline-col-help-btn ghost small" type="button" title="Show writing guidance" aria-expanded="false">?</button>` : ""}
+      <span class="muted small outline-col-count">${cards.length} card${cards.length === 1 ? "" : "s"}</span>
+    </div>
+    ${hasGuidance ? `
+      <div class="outline-col-help hidden">
+        ${col.description ? `<p class="outline-col-desc">${esc(col.description)}</p>` : ""}
+        ${Array.isArray(col.guidance) && col.guidance.length ? `
+          <ul class="outline-col-guidance">
+            ${col.guidance.map(g => `<li>${esc(g)}</li>`).join("")}
+          </ul>` : ""}
+      </div>` : ""}
   `;
+  if (hasGuidance) {
+    const btn = head.querySelector(".outline-col-help-btn");
+    const panel = head.querySelector(".outline-col-help");
+    btn.addEventListener("click", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      const expanded = btn.getAttribute("aria-expanded") === "true";
+      btn.setAttribute("aria-expanded", String(!expanded));
+      panel.classList.toggle("hidden", expanded);
+      btn.textContent = expanded ? "?" : "✕";
+    });
+  }
   colEl.appendChild(head);
 
   const body = document.createElement("div");
