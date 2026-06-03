@@ -15,9 +15,10 @@ import { runGlobalRefresh, provideStateRef } from "./refresh.js";
 import {
   renderReviewPanel, generateScene, insertGeneratedScene,
   suggestTraits, applyTraitSuggestions, openTraitSuggestModal,
-  openSceneProposalModal
+  openSceneProposalModal,
+  reviewCharacterArc, persistCharacterArcReview
 } from "./review.js";
-import { renderOracle } from "./oracle.js?v=20260603c";
+import { renderOracle } from "./oracle.js?v=20260603d";
 import { openStorySettingsModal, getColumnsForProject, defaultColumnId } from "./story-settings.js";
 import { provideExtractionStateRef } from "./extraction.js";
 import { mountLlmConfigBanner } from "./settings.js?v=20260530";
@@ -1069,6 +1070,11 @@ function renderWikiPage(cardId) {
   els.wikiContent.querySelector("[data-wiki-edit]")?.addEventListener("click", () => {
     openCardEditor(cardId);
   });
+  // Run / refresh character arc review from the wiki page itself
+  const runReviewBtn = els.wikiContent.querySelector("[data-wiki-run-review], [data-wiki-rerun-review]");
+  if (runReviewBtn) {
+    runReviewBtn.addEventListener("click", () => runWikiArcReview(cardId));
+  }
   // Wire any cross-reference links to navigate within the wiki
   els.wikiContent.querySelectorAll("[data-wiki-link]").forEach(a => {
     a.addEventListener("click", e => {
@@ -1086,6 +1092,33 @@ function renderWikiPage(cardId) {
 
 function renderWikiCharacter(card, f) {
   const sections = [];
+
+  // Saved arc review (from the Review panel) — shown at the top so it's
+  // the headline summary of the character. If there's no review yet, a
+  // 'Run arc review' button lets the user kick one off from here directly.
+  if (f.arcReview && f.arcReview.review) {
+    const when = wikiRelativeTime(f.arcReview.generatedAt);
+    sections.push(`
+      <section class="wiki-section wiki-arc-review" data-arc-review-block>
+        <div class="wiki-arc-review-head">
+          <h3>Arc review <span class="muted small">— ${esc(when)}</span></h3>
+          <button class="ghost small" data-wiki-rerun-review>↻ Refresh</button>
+        </div>
+        <div class="review-prose">${proseToHtml(f.arcReview.review)}</div>
+        ${f.arcReview.sceneTypeGuidance ? `
+          <h4>What kinds of scenes move this arc</h4>
+          <div class="review-prose">${proseToHtml(f.arcReview.sceneTypeGuidance)}</div>
+        ` : ""}
+      </section>
+    `);
+  } else {
+    sections.push(`
+      <section class="wiki-section wiki-arc-review-empty" data-arc-review-block>
+        <button class="ghost small" data-wiki-run-review>🪄 Run arc review for this character</button>
+      </section>
+    `);
+  }
+
   if (f.physicalDescription || f.age) {
     sections.push(`
       <section class="wiki-section">
@@ -1264,6 +1297,40 @@ function renderWikiCrossRefs(card) {
   }
 
   return sections.join("");
+}
+
+async function runWikiArcReview(characterId) {
+  const card = state.cards.get(characterId);
+  if (!card || card.type !== "character") return;
+  const { ok, result: r } = await runLLMAction(
+    `Reviewing arc for "${card.title}"`,
+    () => reviewCharacterArc(state, characterId)
+  );
+  if (!ok || !r) return;
+  try {
+    await persistCharacterArcReview(state, projectId, characterId, r);
+  } catch (err) {
+    console.warn("[wiki] failed to persist arc review", err);
+  }
+  // Re-render the wiki page to show the cached review
+  if (wikiSelectedCardId === characterId) renderWikiPage(characterId);
+}
+
+// Used by the wiki arc-review block. Mirrors oracle.js's relativeTime
+// helper but kept local to project.js to avoid a circular import.
+function wikiRelativeTime(ts) {
+  if (!ts) return "never";
+  const diff = Date.now() - ts;
+  if (diff < 30000) return "just now";
+  if (diff < 60000) return "less than a minute ago";
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  return `${months}mo ago`;
 }
 
 function cardLink(cardId) {

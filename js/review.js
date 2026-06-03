@@ -343,6 +343,30 @@ export async function saveArcSummary(state, projectId, arcId, newSummary) {
   }], state.project);
 }
 
+// ---------- Persist a character arc review to the character card ----------
+// Stored as fields.arcReview = { review, sceneTypeGuidance, generatedAt }.
+// Logged to the audit trail so global refresh sees it as a structural change.
+
+export async function persistCharacterArcReview(state, projectId, characterId, reviewData) {
+  const card = state.cards.get(characterId);
+  if (!card || card.type !== "character") return;
+  const payload = {
+    review: reviewData?.review || "",
+    sceneTypeGuidance: reviewData?.sceneTypeGuidance || "",
+    generatedAt: Date.now()
+  };
+  card.fields = card.fields || {};
+  card.fields.arcReview = payload;
+  await updateDoc(
+    doc(db, "users", state.user.uid, "projects", projectId, "cards", characterId),
+    { "fields.arcReview": payload, updatedAt: serverTimestamp() }
+  );
+  await logAudit(state.user.uid, projectId, [{
+    entityType: "card", entityId: characterId, field: "arcReview",
+    oldValue: null, newValue: { generatedAt: payload.generatedAt, reviewLength: payload.review.length }
+  }], state.project);
+}
+
 // ---------- Create a foil character proposed by the Character Arc Review ----------
 
 export async function createFoilCharacter(state, projectId, foil) {
@@ -468,6 +492,13 @@ function renderCharacterMode(body, state, projectId) {
       () => reviewCharacterArc(state, id)
     );
     if (!ok || !r) { out.innerHTML = ""; return; }
+    // Persist the prose parts to the character card so the wiki view and
+    // any future visit shows the latest review without re-running it.
+    try {
+      await persistCharacterArcReview(state, projectId, id, r);
+    } catch (err) {
+      console.warn("[review] failed to persist arc review", err);
+    }
 
     out.innerHTML = `
       <section class="review-section">
