@@ -5,7 +5,7 @@
 
 import { db } from "./shared.js";
 import {
-  doc, updateDoc, serverTimestamp
+  doc, updateDoc, serverTimestamp, collection, getDocs, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 
 export const DEFAULT_STORY_SETTINGS = {
@@ -158,6 +158,57 @@ export function defaultColumnId(project) {
   return cols.find(c => c.isMain)?.id || "act-1";
 }
 
+// Column ID remapping when switching FROM the given structure TO
+// "story-bible-default". For source structures whose acts have a
+// direct narrative analogue in the new layout, we move cards
+// intentionally instead of leaving them stranded under unrelated
+// labels. Returns null when no remap is needed.
+export function remapColumnIdsForNewDefault(fromStructure) {
+  switch (fromStructure) {
+    case "5-act":
+      // Exposition/Rising/Climax/Falling/Denouement → Act I/II/Climax/Act III/Act III
+      return {
+        "act-1": "act-1",  // Exposition → Act I
+        "act-2": "act-2",  // Rising Action → Act II
+        "act-3": "act-5",  // Climax → Climax
+        "act-4": "act-6",  // Falling Action → Act III
+        "act-5": "act-6"   // Denouement → Act III
+      };
+    case "3-act":
+      return {
+        "act-1": "act-1",  // Setup → Act I
+        "act-2": "act-2",  // Confrontation → Act II
+        "act-3": "act-6"   // Resolution → Act III
+      };
+    case "heros-journey":
+      return {
+        "act-1": "act-1",  // Departure → Act I
+        "act-2": "act-2",  // Initiation → Act II
+        "act-3": "act-6"   // Return → Act III
+      };
+    case "save-the-cat":
+      // Already 6 columns and the order maps cleanly to the new structure
+      return {
+        "act-1": "act-1",
+        "act-2": "act-2",
+        "act-3": "act-3",
+        "act-4": "act-4",
+        "act-5": "act-5",
+        "act-6": "act-6"
+      };
+    case "kishotenketsu":
+      return {
+        "act-1": "act-1",  // Ki → Act I
+        "act-2": "act-2",  // Shō → Act II
+        "act-3": "act-4",  // Ten (twist) → Crisis
+        "act-4": "act-6"   // Ketsu → Act III
+      };
+    case "free":
+      return { "act-1": "act-2" }; // single "Story" → Act II as a starting point
+  }
+  return null;
+}
+
 export function getStorySettings(project) {
   return {
     ...DEFAULT_STORY_SETTINGS,
@@ -216,6 +267,53 @@ export function buildProjectContext(project) {
   return lines.join("\n");
 }
 
+// One-click migration: switch a project to the story-bible-default structure
+// and remap card columnIds according to remapColumnIdsForNewDefault.
+// Updates Firestore in a single batch and refreshes state.
+export async function migrateProjectToNewDefault(state, projectId) {
+  const current = getStorySettings(state.project);
+  if (current.structure === "story-bible-default") {
+    return { ok: false, reason: "already-on-default" };
+  }
+  const remap = remapColumnIdsForNewDefault(current.structure) || {};
+  const cardsRef = collection(db, "users", state.user.uid, "projects", projectId, "cards");
+  const snap = await getDocs(cardsRef);
+
+  // Build the batch of card updates
+  const batch = writeBatch(db);
+  let movedCount = 0;
+  snap.forEach(d => {
+    const data = d.data();
+    if (data.type !== "scene" && data.type !== "beat") return;
+    const cur = data.fields?.columnId;
+    if (!cur) return;
+    const next = remap[cur];
+    if (!next || next === cur) return;
+    batch.update(d.ref, {
+      "fields.columnId": next,
+      updatedAt: serverTimestamp()
+    });
+    // Update local state too
+    const local = state.cards.get(d.id);
+    if (local) {
+      local.fields = local.fields || {};
+      local.fields.columnId = next;
+    }
+    movedCount++;
+  });
+
+  // Also update the project's structure setting
+  state.project.storySettings = state.project.storySettings || {};
+  state.project.storySettings.structure = "story-bible-default";
+  batch.update(doc(db, "users", state.user.uid, "projects", projectId), {
+    "storySettings.structure": "story-bible-default",
+    updatedAt: serverTimestamp()
+  });
+
+  await batch.commit();
+  return { ok: true, movedCount, fromStructure: current.structure };
+}
+
 export function openStorySettingsModal(state, projectId, { onSaved } = {}) {
   const project = state.project;
   const s = getStorySettings(project);
@@ -243,6 +341,15 @@ export function openStorySettingsModal(state, projectId, { onSaved } = {}) {
             ${STRUCTURE_OPTIONS.map(o => `<option value="${attr(o.id)}"${s.structure === o.id ? " selected" : ""}>${esc(o.label)}</option>`).join("")}
           </select>
         </label>
+
+        ${s.structure !== "story-bible-default" ? `
+          <div class="ss-migration">
+            <p class="muted small"><strong>You're on the older "${esc(STRUCTURE_OPTIONS.find(o => o.id === s.structure)?.label || s.structure)}" structure.</strong></p>
+            <p class="muted small">Click below to switch to the new "Story Bible default" structure and automatically move your scene and beat cards to the matching new columns (Mid-Point and Crisis will start empty — those are new concepts).</p>
+            <button type="button" id="ss-migrate-btn" class="primary small">Switch to Story Bible default and remap my cards</button>
+            <p class="muted small" id="ss-migrate-status"></p>
+          </div>
+        ` : ""}
 
         <label>Voice / style notes
           <textarea id="ss-voice" rows="2" placeholder="e.g. Spare, character-driven. No purple prose. Scenes lean visual.">${esc(s.voiceNotes)}</textarea>
@@ -299,6 +406,32 @@ export function openStorySettingsModal(state, projectId, { onSaved } = {}) {
   overlay.addEventListener("click", e => {
     if (e.target === overlay && mouseDownOnOverlay) close();
     mouseDownOnOverlay = false;
+  });
+
+  overlay.querySelector("#ss-migrate-btn")?.addEventListener("click", async () => {
+    const btn = overlay.querySelector("#ss-migrate-btn");
+    const status = overlay.querySelector("#ss-migrate-status");
+    const ok = confirm("Switch this project to the new Story Bible default structure?\n\nYour scenes and beats will be remapped:\n  - Act I and Act II stay where they are\n  - Climax content moves to the new Climax column\n  - Falling Action and Denouement move to Act III\n  - Mid-Point and Crisis start empty (new concepts)\n\nThis writes to Firestore. Continue?");
+    if (!ok) return;
+    btn.disabled = true;
+    status.textContent = "Migrating…";
+    try {
+      const res = await migrateProjectToNewDefault(state, projectId);
+      if (!res.ok && res.reason === "already-on-default") {
+        status.textContent = "Already on the new structure.";
+        return;
+      }
+      status.textContent = `Done — moved ${res.movedCount} card${res.movedCount === 1 ? "" : "s"} to the new structure.`;
+      // Refresh story-settings modal UI to reflect the new state without forcing a page reload
+      setTimeout(() => {
+        close();
+        onSaved?.(getStorySettings(state.project));
+      }, 1500);
+    } catch (err) {
+      console.error("[story-settings] migrate failed", err);
+      status.textContent = "Migration failed: " + (err.message || err);
+      btn.disabled = false;
+    }
   });
 
   overlay.querySelector(".save").addEventListener("click", async () => {

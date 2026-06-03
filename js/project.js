@@ -17,7 +17,7 @@ import {
   suggestTraits, applyTraitSuggestions, openTraitSuggestModal,
   openSceneProposalModal
 } from "./review.js";
-import { renderOracle } from "./oracle.js?v=20260603";
+import { renderOracle } from "./oracle.js?v=20260603a";
 import { openStorySettingsModal, getColumnsForProject, defaultColumnId } from "./story-settings.js";
 import { provideExtractionStateRef } from "./extraction.js";
 import { mountLlmConfigBanner } from "./settings.js?v=20260530";
@@ -181,7 +181,14 @@ els.recenterBtn?.addEventListener("click", () => {
 });
 els.storySettingsBtn?.addEventListener("click", () => {
   openStorySettingsModal(state, projectId, {
-    onSaved: () => { console.log("[story-settings] saved"); }
+    onSaved: () => {
+      console.log("[story-settings] saved");
+      // Re-render whichever view is active so a structure change shows up
+      // immediately (especially relevant after a remap).
+      if (els.outlineView && !els.outlineView.classList.contains("hidden")) {
+        renderOutline();
+      }
+    }
   });
 });
 

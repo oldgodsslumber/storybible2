@@ -1,7 +1,7 @@
 // Oracle tab — themed categories, collapsible cards, roll-from-collapsed.
 // Data lives in oracle-data.js (auto-generated).
 
-import { ORACLE } from "./oracle-data.js?v=20260603";
+import { ORACLE } from "./oracle-data.js?v=20260603a";
 
 const HISTORY_LIMIT = 30;
 let history = [];          // {tableName, result, ts}
