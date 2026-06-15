@@ -294,16 +294,24 @@ async function callGemini(s, { system, user, expectJson, temperature, signal }) 
 
   const attemptCall = async (modelId) => {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(s.geminiApiKey)}`;
+    // Gemma models on the Gemini API are NOT in the structured-output model set
+    // and are NOT part of the tunable-safety system (per Google's docs). So for
+    // gemma-* ids we: fold the system prompt into the user turn instead of
+    // sending systemInstruction, omit safetySettings, and — crucially — do NOT
+    // request responseMimeType: application/json (unsupported; it's what broke
+    // Gemma here). parseJsonLoose + the repair pass in callLLMJson already
+    // recover JSON from prose, so dropping JSON mode is safe.
+    const isGemma = /^gemma/i.test(modelId);
     const body = {
-      contents: [{ role: "user", parts: [{ text: user }] }],
-      generationConfig: { temperature, maxOutputTokens: 8192 },
-      safetySettings: SAFETY_OFF
+      contents: [{ role: "user", parts: [{ text: isGemma && system ? `${system}\n\n${user}` : user }] }],
+      generationConfig: { temperature, maxOutputTokens: 8192 }
     };
-    if (system) body.systemInstruction = { parts: [{ text: system }] };
-    if (expectJson) body.generationConfig.responseMimeType = "application/json";
+    if (system && !isGemma) body.systemInstruction = { parts: [{ text: system }] };
+    if (!isGemma) body.safetySettings = SAFETY_OFF;
+    if (expectJson && !isGemma) body.generationConfig.responseMimeType = "application/json";
 
     const u = getDailyUsage();
-    console.log("[llm] Gemini POST", { model: modelId, used: u.counts[modelId] || 0, expectJson });
+    console.log("[llm] Gemini POST", { model: modelId, used: u.counts[modelId] || 0, expectJson, isGemma });
     const resp = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
