@@ -413,6 +413,9 @@ async function loadProject() {
     history.replaceState({}, "", `./project.html?id=${encodeURIComponent(projectId)}`);
     await maybeRunIdeaDumpExtraction();
   }
+  // Surface any approved items that failed to save on a previous visit so the
+  // writer can retry or download them instead of silently losing the work.
+  renderRecoveryBanner();
 }
 
 async function maybeRunIdeaDumpExtraction() {
@@ -457,10 +460,12 @@ async function runIdeaDumpExtractionNow(themeText) {
     title: "Review what the LLM found in your idea dump",
     onApprove: async (approved) => {
       try {
-        await applyApprovedItems(approved);
+        await applyApprovedItemsSafe(approved, { kind: "idea-dump", sourceText: themeText });
       } catch (err) {
         console.error("[idea-dump] applyApprovedItems failed", err);
-        alert("Saving approved items failed: " + (err.message || err));
+        renderRecoveryBanner();
+        alert("Saving approved items failed: " + (err.message || err) +
+          "\n\n✅ Your approved items were backed up locally. Reload the project to Retry or Download them from the recovery bar at the bottom — nothing was lost.");
         return;
       }
       const { ok: gapOk, result: gap } = await runLLMAction(
@@ -512,11 +517,13 @@ async function parseNoteHandler() {
     title: "Review what the LLM found in your note",
     onApprove: async (approved) => {
       try {
-        await applyApprovedItems(approved);
+        await applyApprovedItemsSafe(approved, { kind: "note", sourceText: text });
         els.notePanel.value = "";
       } catch (err) {
         console.error("[parse-note] applyApprovedItems failed", err);
-        alert("Saving approved items failed: " + (err.message || err));
+        renderRecoveryBanner();
+        alert("Saving approved items failed: " + (err.message || err) +
+          "\n\n✅ Your approved items were backed up locally and your note text was kept. Use the recovery bar at the bottom to Retry or Download — nothing was lost.");
         return;
       }
       // After approval, run gap analysis on the same note so the LLM can
@@ -560,6 +567,175 @@ function setLlmStatus(msg) {
 
 // --- Apply approved items to Firestore + state ---
 
+// ---------------------------------------------------------------------------
+// Crash-safety for LLM approval saves
+//
+// Two things repeatedly lost the writer's work here:
+//   1. Firestore rejects NESTED arrays (an array inside an array). The LLM
+//      occasionally returns an `addValue` that is itself an array, which got
+//      pushed into a traits/history list and produced exactly the shape
+//      updateDoc() refuses — "Nested arrays are not supported". One bad value
+//      threw and discarded the entire approved batch.
+//   2. There was no backup, so a failed save lost everything the writer had
+//      just reviewed and approved, with no way to tell what (if anything) saved.
+//
+// toStringList() guarantees a flat array of non-empty strings so a malformed
+// shape degrades gracefully instead of blowing up the whole save. The backup
+// helpers persist the approved payload to localStorage before we touch
+// Firestore and only clear it once the save fully succeeds.
+// ---------------------------------------------------------------------------
+
+// Coerce any value into a single-level array of non-empty strings. Flattens
+// nested arrays (the root cause of the Firestore crash) to any depth.
+function toStringList(value) {
+  if (value === undefined || value === null) return [];
+  const flat = Array.isArray(value) ? value.flat(Infinity) : [value];
+  return flat
+    .filter(v => v !== undefined && v !== null && v !== "")
+    .map(v => (typeof v === "string" ? v : String(v)));
+}
+
+const BACKUP_KEY = "storybible_pending_saves";
+
+function readBackups() {
+  try { return JSON.parse(localStorage.getItem(BACKUP_KEY) || "[]"); }
+  catch (e) { console.error("[backup] could not read backups", e); return []; }
+}
+
+function writeBackups(list) {
+  try { localStorage.setItem(BACKUP_KEY, JSON.stringify(list)); }
+  catch (e) { console.error("[backup] could not write backups (quota?)", e); }
+}
+
+// Persist a snapshot of what we're about to save. Returns the backup id so the
+// caller can clear it once the Firestore write succeeds.
+function saveBackup(entry) {
+  const list = readBackups();
+  const rec = {
+    id: (window.crypto && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : "bk_" + Date.now() + "_" + Math.random().toString(36).slice(2),
+    projectId,
+    projectTitle: state.project?.title || "(untitled)",
+    createdAt: new Date().toISOString(),
+    ...entry
+  };
+  list.push(rec);
+  while (list.length > 50) list.shift(); // bound growth
+  writeBackups(list);
+  console.log("[backup] saved", { id: rec.id, kind: rec.kind });
+  return rec.id;
+}
+
+function clearBackup(id) {
+  writeBackups(readBackups().filter(b => b.id !== id));
+  console.log("[backup] cleared", { id });
+}
+
+// Wraps applyApprovedItems so the approved payload is always backed up first
+// and only removed on success. On failure the backup survives and the
+// recovery banner (shown on next load) lets the writer retry or download it.
+async function applyApprovedItemsSafe(approved, { kind = "approved", sourceText = "" } = {}) {
+  const backupId = saveBackup({ kind, sourceText, payload: approved });
+  try {
+    await applyApprovedItems(approved);
+    clearBackup(backupId);
+  } catch (err) {
+    console.error("[backup] save failed; backup retained", { backupId, err });
+    if (err && typeof err === "object") err.__backupRetained = true;
+    throw err;
+  }
+}
+
+// ---- Recovery UI ---------------------------------------------------------
+
+function downloadBackup(rec) {
+  try {
+    const blob = new Blob([JSON.stringify(rec, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `storybible-recovery-${(rec.createdAt || "").replace(/[:.]/g, "-")}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  } catch (e) {
+    console.error("[backup] download failed", e);
+    alert("Could not download the backup automatically. Open the browser console and copy this:\n\n" + JSON.stringify(rec));
+  }
+}
+
+function backupItemCount(payload) {
+  if (!payload || typeof payload !== "object") return 0;
+  return ["characters", "locations", "themes", "concepts", "beats", "scenes", "updates", "connections", "storySettings"]
+    .reduce((n, k) => n + (Array.isArray(payload[k]) ? payload[k].length : 0), 0);
+}
+
+// Show a banner if this project has unsaved approval payloads from a previous
+// failed save. Lets the writer retry the save or download a JSON copy so their
+// work is never trapped in localStorage.
+function renderRecoveryBanner() {
+  document.getElementById("recoveryBanner")?.remove();
+  const pending = readBackups().filter(b => b.projectId === projectId);
+  if (pending.length === 0) return;
+
+  const banner = document.createElement("div");
+  banner.id = "recoveryBanner";
+  banner.style.cssText =
+    "position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#3a1d1d;color:#f5e9e9;" +
+    "border-top:2px solid #c0392b;padding:12px 16px;font:14px/1.4 system-ui,sans-serif;" +
+    "box-shadow:0 -4px 16px rgba(0,0,0,.4);max-height:60vh;overflow:auto;";
+
+  const total = pending.reduce((n, b) => n + backupItemCount(b.payload), 0);
+  const header = document.createElement("div");
+  header.style.cssText = "font-weight:600;margin-bottom:8px;";
+  header.textContent = `⚠ ${total} approved item(s) from ${pending.length} unsaved batch(es) were recovered after a failed save. Retry or download them so nothing is lost.`;
+  banner.appendChild(header);
+
+  for (const rec of pending) {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-top:1px solid rgba(255,255,255,.12);";
+    const when = (() => { try { return new Date(rec.createdAt).toLocaleString(); } catch { return rec.createdAt; } })();
+    const label = document.createElement("span");
+    label.style.cssText = "flex:1;min-width:180px;";
+    label.textContent = `${when} — ${backupItemCount(rec.payload)} item(s)`;
+    row.appendChild(label);
+
+    const mkBtn = (text, bg, handler) => {
+      const b = document.createElement("button");
+      b.textContent = text;
+      b.style.cssText = `cursor:pointer;border:0;border-radius:6px;padding:6px 12px;color:#fff;background:${bg};font:inherit;`;
+      b.addEventListener("click", handler);
+      return b;
+    };
+
+    row.appendChild(mkBtn("Retry save", "#2980b9", async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true; btn.textContent = "Saving…";
+      try {
+        await applyApprovedItems(rec.payload);
+        clearBackup(rec.id);
+        renderRecoveryBanner();
+      } catch (err) {
+        console.error("[backup] retry failed", err);
+        btn.disabled = false; btn.textContent = "Retry save";
+        alert("Retry failed again: " + (err?.message || err) + "\n\nYour data is still backed up — use Download to keep a copy.");
+      }
+    }));
+    row.appendChild(mkBtn("Download", "#27ae60", () => downloadBackup(rec)));
+    row.appendChild(mkBtn("Discard", "#7f8c8d", () => {
+      if (confirm("Discard this recovered batch? Download it first if you might want it.")) {
+        clearBackup(rec.id);
+        renderRecoveryBanner();
+      }
+    }));
+    banner.appendChild(row);
+  }
+
+  document.body.appendChild(banner);
+}
+
 async function applyApprovedItems(approved) {
   console.log("[apply] approved input", {
     characters: approved?.characters?.length || 0,
@@ -577,9 +753,14 @@ async function applyApprovedItems(approved) {
   const connCol  = collection(db, "users", state.user.uid, "projects", projectId, "connections");
   const auditBatch = [];
   let added = 0;
+  // Collect per-item failures instead of letting the first one abort the whole
+  // batch. We report them at the end so partially-successful saves still commit
+  // the items that worked (and the writer is told exactly what didn't).
+  const failures = [];
 
   for (const ch of approved.characters || []) {
     if (!ch.name) { console.warn("[apply] skipped character with no name", ch); continue; }
+    if (nameToCardId.has(ch.name.toLowerCase())) { console.log("[apply] character already exists, skipping create", ch.name); continue; }
     const data = {
       type: "character",
       title: ch.name,
@@ -590,8 +771,8 @@ async function applyApprovedItems(approved) {
       fields: {
         ...blankFieldsForType("character"),
         role: ch.role || "",
-        traits: ch.traits || [],
-        history: ch.history || []
+        traits: toStringList(ch.traits),
+        history: toStringList(ch.history)
       }
     };
     const ref = await addDoc(cardsCol, data);
@@ -603,6 +784,7 @@ async function applyApprovedItems(approved) {
   }
   for (const l of approved.locations || []) {
     if (!l.name) { console.warn("[apply] skipped location with no name", l); continue; }
+    if (nameToCardId.has(l.name.toLowerCase())) { console.log("[apply] location already exists, skipping create", l.name); continue; }
     const data = {
       type: "location", title: l.name, archived: false,
       createdAt: serverTimestamp(), updatedAt: serverTimestamp(), order: 0,
@@ -617,6 +799,7 @@ async function applyApprovedItems(approved) {
   }
   for (const t of approved.themes || []) {
     if (!t.name) { console.warn("[apply] skipped theme with no name", t); continue; }
+    if (nameToCardId.has(t.name.toLowerCase())) { console.log("[apply] theme already exists, skipping create", t.name); continue; }
     const data = {
       type: "theme", title: t.name, archived: false,
       createdAt: serverTimestamp(), updatedAt: serverTimestamp(), order: 0,
@@ -631,6 +814,7 @@ async function applyApprovedItems(approved) {
   }
   for (const c of approved.concepts || []) {
     if (!c.name) { console.warn("[apply] skipped concept with no name", c); continue; }
+    if (nameToCardId.has(c.name.toLowerCase())) { console.log("[apply] concept already exists, skipping create", c.name); continue; }
     const data = {
       type: "concept", title: c.name, archived: false,
       createdAt: serverTimestamp(), updatedAt: serverTimestamp(), order: 0,
@@ -728,13 +912,18 @@ async function applyApprovedItems(approved) {
     card.fields = card.fields || {};
     const f = u.field;
     if (f === "traits" || f === "history") {
-      const arr = Array.isArray(card.fields[f]) ? card.fields[f].slice() : [];
-      arr.push(u.addValue);
+      // Start from a flat string list and append the new value(s). toStringList
+      // flattens the case where the LLM hands us an array for addValue, which
+      // would otherwise produce a Firestore-rejected nested array.
+      const arr = toStringList(card.fields[f]);
+      arr.push(...toStringList(u.addValue));
       card.fields[f] = arr;
     } else if (f === "role" || f === "description") {
-      card.fields[f] = card.fields[f] ? (card.fields[f] + "\n" + u.addValue) : u.addValue;
+      const add = Array.isArray(u.addValue) ? toStringList(u.addValue).join("\n") : u.addValue;
+      card.fields[f] = card.fields[f] ? (card.fields[f] + "\n" + add) : add;
     } else {
-      card.fields[f] = u.addValue;
+      // Never let a nested array reach Firestore for unknown fields either.
+      card.fields[f] = Array.isArray(u.addValue) ? toStringList(u.addValue) : u.addValue;
     }
     // Stale impact for updates from LLM parsing
     const impact = staleImpact("card-" + card.type, f);
@@ -743,12 +932,17 @@ async function applyApprovedItems(approved) {
       card.fields[impact.self.field] = impact.self.value;
       extra[`fields.${impact.self.field}`] = impact.self.value;
     }
-    await updateDoc(doc(db, "users", state.user.uid, "projects", projectId, "cards", targetId), {
-      [`fields.${f}`]: card.fields[f],
-      ...extra,
-      updatedAt: serverTimestamp()
-    });
-    auditBatch.push({ entityType: "card", entityId: targetId, field: f, oldValue: null, newValue: u.addValue });
+    try {
+      await updateDoc(doc(db, "users", state.user.uid, "projects", projectId, "cards", targetId), {
+        [`fields.${f}`]: card.fields[f],
+        ...extra,
+        updatedAt: serverTimestamp()
+      });
+      auditBatch.push({ entityType: "card", entityId: targetId, field: f, oldValue: null, newValue: u.addValue });
+    } catch (err) {
+      console.error("[apply] update failed; continuing with rest of batch", { entity: u.entityName, field: f, err });
+      failures.push(`update "${u.entityName}" → ${f}: ${err?.message || err}`);
+    }
   }
 
   for (const c of approved.connections || []) {
@@ -803,9 +997,14 @@ async function applyApprovedItems(approved) {
     await logAudit(state.user.uid, projectId, auditBatch, state.project);
   }
   await touchProject();
-  console.log("[apply] complete", { added, totalCardsNow: state.cards.size });
+  console.log("[apply] complete", { added, totalCardsNow: state.cards.size, failures: failures.length });
   rebuildGraphElements();
   updateRefreshNudge();
+  // If some items failed, throw so the caller keeps the backup for recovery —
+  // but only AFTER committing everything that did succeed above.
+  if (failures.length) {
+    throw new Error(`${failures.length} item(s) could not be saved:\n- ${failures.join("\n- ")}`);
+  }
 }
 
 async function applyWizardAnswers(answers) {
@@ -838,10 +1037,12 @@ async function applyWizardAnswers(answers) {
         title: "Review what the LLM extracted from your wizard answers",
         onApprove: async (approved) => {
           try {
-            await applyApprovedItems(approved);
+            await applyApprovedItemsSafe(approved, { kind: "wizard", sourceText: noteText });
           } catch (err) {
             console.error("[wizard-answers] applyApprovedItems failed", err);
-            alert("Saving approved items failed: " + (err.message || err));
+            renderRecoveryBanner();
+            alert("Saving approved items failed: " + (err.message || err) +
+              "\n\n✅ Your approved items were backed up locally. Use the recovery bar at the bottom to Retry or Download — nothing was lost.");
           }
         }
       });

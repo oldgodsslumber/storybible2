@@ -168,6 +168,12 @@ export async function callLLM({ system, user, expectJson = false, temperature, s
   }
   const temp = temperature ?? s.temperature ?? 0.3;
 
+  // Repeat the JSON output contract as the LAST thing the model sees (see
+  // JSON_OUTPUT_REMINDER). Only for JSON calls — prose tasks (scene drafting)
+  // must not be told to emit JSON. Appended to the user turn so it lands after
+  // the idea-dump for every provider, including the Gemma system-folded path.
+  const effectiveUser = expectJson ? `${user}\n\n${JSON_OUTPUT_REMINDER}` : user;
+
   let lastErr = null;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     if (attempt > 0) {
@@ -180,8 +186,8 @@ export async function callLLM({ system, user, expectJson = false, temperature, s
     const timer = setTimeout(() => timeoutCtl.abort(new DOMException(`LLM call exceeded ${timeoutMs ?? DEFAULT_TIMEOUT_MS}ms timeout`, "TimeoutError")), timeoutMs ?? DEFAULT_TIMEOUT_MS);
     const combinedSignal = anySignal([signal, timeoutCtl.signal]);
     try {
-      if (s.provider === "gemini") return await callGemini(s, { system, user, expectJson, temperature: temp, signal: combinedSignal });
-      if (s.provider === "ooba")   return await callOoba(s,   { system, user, expectJson, temperature: temp, signal: combinedSignal });
+      if (s.provider === "gemini") return await callGemini(s, { system, user: effectiveUser, expectJson, temperature: temp, signal: combinedSignal });
+      if (s.provider === "ooba")   return await callOoba(s,   { system, user: effectiveUser, expectJson, temperature: temp, signal: combinedSignal });
       throw new Error(`Unknown provider: ${s.provider}`);
     } catch (err) {
       lastErr = err;
@@ -283,6 +289,62 @@ const SAFETY_OFF = [
   { category: "HARM_CATEGORY_CIVIC_INTEGRITY",   threshold: "BLOCK_NONE" }
 ];
 
+// Lesson adapted from the AI GM app: weak models (Gemma on the Gemini API, and
+// local Ooba models) reliably forget a "return ONLY JSON" rule that sits at the
+// TOP of the prompt by the time they finish reading a long idea-dump — they
+// answer in prose or echo the schema template with "..." placeholders. The fix
+// is to repeat the output contract as the LAST thing the model sees, right
+// before it starts generating. Appended to the user turn for JSON calls only.
+const JSON_OUTPUT_REMINDER = [
+  "REMINDER — output format (this overrides any urge to explain or chat):",
+  "Reply with ONLY the JSON described above. Start your reply with { and end with }.",
+  "No prose before or after it, no markdown code fences, no comments.",
+  'Do NOT copy the schema literally: replace every placeholder and every "..." with real',
+  "values drawn from the text above. If you genuinely found nothing for a field, use an",
+  'empty array [] or empty string "" — never a placeholder, never "...".'
+].join("\n");
+
+function labelForModel(modelId) {
+  const entry = GEMINI_FALLBACK_CHAIN.find(c => c.id === modelId);
+  return entry ? entry.label : modelId;
+}
+
+// A 200-OK Gemini response can still carry no usable text. Gemini signals the
+// reason two different ways and they need different advice:
+//   - promptFeedback.blockReason → the INPUT was blocked before any generation
+//   - candidates[0].finishReason → generation started, then stopped/was cut
+// Adapted from the AI GM app so an empty reply tells the writer what to actually
+// do (rephrase, shrink the dump, switch models) instead of a bare finishReason.
+function buildEmptyResponseMessage(json, modelId) {
+  const isGemma = /^gemma/i.test(modelId);
+  const pf = json?.promptFeedback;
+  if (pf?.blockReason) {
+    if (/SAFETY/i.test(pf.blockReason)) {
+      return isGemma
+        ? `Gemini blocked your prompt as unsafe before generating anything (model ${labelForModel(modelId)}). Try rephrasing the idea dump or note.`
+        : `Gemini blocked your prompt as unsafe before generating anything. Safety filters are already off for ${labelForModel(modelId)}, so this is a hard block — try rephrasing, or switch to a Gemma model in Settings (filtered differently).`;
+    }
+    return `Gemini blocked your prompt (${pf.blockReason}) before generating anything. Try rephrasing it, or switch models in Settings.`;
+  }
+  const reason = json?.candidates?.[0]?.finishReason;
+  switch (reason) {
+    case "MAX_TOKENS":
+      return `Gemini hit its output limit before returning any text — on a 2.5 model its hidden "thinking" likely used the whole budget. Shrink the idea-dump, or switch to a Gemma model in Settings (no hidden thinking).`;
+    case "SAFETY":
+      return `Gemini stopped on its safety filter and returned nothing. Filters are already off for ${labelForModel(modelId)}, so try rephrasing, or switch to a Gemma model in Settings (filtered differently).`;
+    case "RECITATION":
+      return `Gemini stopped because its reply matched recited/copyrighted material. Rephrase to ask for original content, or just retry — this is often non-deterministic.`;
+    case "PROHIBITED_CONTENT":
+    case "SPII":
+    case "BLOCKLIST":
+      return `Gemini refused to answer (${reason}) and returned nothing. Try rephrasing, or switch models in Settings.`;
+    case "OTHER":
+      return `Gemini stopped for an unspecified reason (finishReason: OTHER) and returned no text. Usually transient — try again, or switch models in Settings.`;
+    default:
+      return `Gemini returned an empty reply${reason ? ` (finishReason: ${reason})` : ""}. On a 2.5 model this usually means its "thinking" consumed the output budget — retry, shrink the idea-dump, or pick a Gemma model in Settings.`;
+  }
+}
+
 async function callGemini(s, { system, user, expectJson, temperature, signal }) {
   // Pick the actual model: start from user-chosen, fall through the chain
   // if the chosen one is exhausted for today.
@@ -309,6 +371,14 @@ async function callGemini(s, { system, user, expectJson, temperature, signal }) 
     if (system && !isGemma) body.systemInstruction = { parts: [{ text: system }] };
     if (!isGemma) body.safetySettings = SAFETY_OFF;
     if (expectJson && !isGemma) body.generationConfig.responseMimeType = "application/json";
+    // Gemini 2.5 Flash models "think" before answering, drawing from the SAME
+    // output budget. On big extraction prompts that thinking can eat the whole
+    // budget and return an empty reply (finishReason MAX_TOKENS). Extraction
+    // needs no visible reasoning, so disable thinking for JSON calls. (Adapted
+    // from the AI GM app.) Gemma has no thinking; Pro can't disable it.
+    if (expectJson && /gemini-2\.5-flash/i.test(modelId)) {
+      body.generationConfig.thinkingConfig = { thinkingBudget: 0 };
+    }
 
     const u = getDailyUsage();
     console.log("[llm] Gemini POST", { model: modelId, used: u.counts[modelId] || 0, expectJson, isGemma });
@@ -325,15 +395,19 @@ async function callGemini(s, { system, user, expectJson, temperature, signal }) 
       err.modelId = modelId;
       throw err;
     }
+    // A 200 means Google accepted and ran the call — it spends a free-tier
+    // request NOW, before we know if usable text came back. Count it here so an
+    // empty/filtered reply (thinking ate the budget, soft block, MAX_TOKENS) is
+    // still tallied and the daily fall-through fires on time. (Adapted from the
+    // AI GM app.) 429/5xx/timeouts never reach a 200, so they're correctly not
+    // counted — Google doesn't bill those.
+    bumpModelUsage(modelId);
     const json = await resp.json();
     const text = json?.candidates?.[0]?.content?.parts?.map(p => p.text).join("") ?? "";
     console.log("[llm] Gemini reply", { model: modelId, length: text.length, preview: text.slice(0, 200) });
     if (!text) {
-      const finishReason = json?.candidates?.[0]?.finishReason;
-      const safety = json?.candidates?.[0]?.safetyRatings;
-      throw new Error(`Gemini returned no text. finishReason=${finishReason || "unknown"}${safety ? "; safetyRatings=" + JSON.stringify(safety) : ""}`);
+      throw new Error(buildEmptyResponseMessage(json, modelId));
     }
-    bumpModelUsage(modelId);
     return text;
   };
 
