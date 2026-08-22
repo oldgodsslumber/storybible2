@@ -42,7 +42,7 @@ export function openSettingsModal() {
           <legend>Gemini</legend>
           <label>API Key <input id="geminiApiKey" type="password" value="${attr(s.geminiApiKey)}" placeholder="AIza..." /></label>
           <label>Model
-            <input id="geminiModel" type="text" list="geminiModelOptions" value="${attr(s.geminiModel)}" placeholder="gemini-2.5-flash…" />
+            <input id="geminiModel" type="text" list="geminiModelOptions" value="${attr(s.geminiModel)}" placeholder="gemini-3.7-flash…" />
             <datalist id="geminiModelOptions">
               ${GEMINI_MODELS.map(m => `<option value="${attr(m.id)}">${esc(m.label)}</option>`).join("")}
             </datalist>
@@ -69,7 +69,7 @@ export function openSettingsModal() {
                 }).join("");
               })()}
             </ul>
-            <p class="muted small">The app starts with the first model and automatically falls through to the next when one hits its daily limit. Counts reset at local midnight. Manual model picks outside this chain (e.g. gemini-2.5-pro) bypass the chain entirely.</p>
+            <p class="muted small">The app starts with the first model and automatically falls through to the next when one hits its daily limit. Counts reset at local midnight. Manual model picks outside this chain (e.g. gemini-3.1-pro-preview) bypass the chain entirely.</p>
           </div>
 
           <div class="provider-help">
@@ -79,7 +79,7 @@ export function openSettingsModal() {
               <li>Sign in with your Google account if prompted.</li>
               <li>Click <strong>Create API key</strong> and let AI Studio pick the Google Cloud project for you. AI Studio will use a project without billing enabled, which is what the free tier requires.</li>
               <li>Copy the key (it starts with <code>AIza</code>) and paste it into the <strong>API Key</strong> field above.</li>
-              <li>Leave the model as <code>gemini-2.0-flash</code> unless you have a reason to change it — flash is fast, free, and works well for this app. <code>gemini-2.5-flash</code> also works.</li>
+              <li>Leave the model as <code>gemini-3.7-flash</code> unless you have a reason to change it — flash is fast, free, and works well for this app. <code>gemini-3.5-flash-lite</code> also works.</li>
             </ol>
             <p class="muted small"><strong>If Test connection returns 429 with "limit: 0":</strong> your key was created on a project that isn't eligible for the free tier (usually because billing is enabled). Delete the key in AI Studio and create a new one — let AI Studio pick the project this time.</p>
             <p class="muted small">The free tier gives generous daily limits. The key stays in this browser's localStorage and is sent only to Google's API — never to any server we control.</p>
@@ -162,7 +162,7 @@ export function openSettingsModal() {
     return {
       provider: providerSel.value,
       geminiApiKey: overlay.querySelector("#geminiApiKey").value.trim(),
-      geminiModel: overlay.querySelector("#geminiModel").value.trim() || "gemini-2.0-flash",
+      geminiModel: overlay.querySelector("#geminiModel").value.trim() || "gemini-3.7-flash",
       oobaBaseUrl: overlay.querySelector("#oobaBaseUrl").value.trim() || "http://127.0.0.1:5000",
       oobaModel: overlay.querySelector("#oobaModel").value.trim() || "local-model",
       temperature: parseFloat(overlay.querySelector("#temperature").value) || 0.3

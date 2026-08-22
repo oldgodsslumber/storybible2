@@ -8,7 +8,7 @@ const SETTINGS_KEY = "storybible.llm.settings.v1";
 const DEFAULTS = {
   provider: "none",
   geminiApiKey: "",
-  geminiModel: "gemini-2.5-flash-lite",
+  geminiModel: "gemini-3.7-flash",
   oobaBaseUrl: "http://127.0.0.1:5000",
   oobaModel: "local-model",
   temperature: 0.3
@@ -31,9 +31,12 @@ const DEFAULTS = {
 // IDs are lowercased here to match the Gemini API URL convention
 // (Gemma 3 uses gemma-3-27b-it lowercase). If Google's API expects
 // mixed case (e.g. gemma-4-31B-it), one edit here updates everything.
+// dailyLimit for the 3.x entries is a PLACEHOLDER — Google no longer publishes
+// per-model free-tier RPD. The 429 fall-through is the real backstop.
 export const GEMINI_FALLBACK_CHAIN = [
+  { id: "gemini-3.7-flash",       dailyLimit: 20,   label: "Gemini 3.7 Flash" },
+  { id: "gemini-3.5-flash-lite",  dailyLimit: 20,   label: "Gemini 3.5 Flash Lite" },
   { id: "gemini-2.5-flash",       dailyLimit: 20,   label: "Gemini 2.5 Flash" },
-  { id: "gemini-2.5-flash-lite",  dailyLimit: 20,   label: "Gemini 2.5 Flash Lite" },
   { id: "gemma-4-31b-it",         dailyLimit: 1500, label: "Gemma 4 31B (dense)" },
   { id: "gemma-4-26b-a4b-it",     dailyLimit: 1500, label: "Gemma 4 26B-A4B (MoE)" }
 ];
@@ -46,15 +49,18 @@ export const GEMINI_MODELS = [
     id: m.id,
     label: `${m.id} — ${m.label} · ${m.dailyLimit}/day free${i === 0 ? " (default — chain auto-falls through)" : ""}`
   })),
-  // Smaller Gemma 4 variants — useful for very high throughput needs
-  { id: "gemma-4-e4b-it",         label: "gemma-4-e4b-it — Gemma 4 4B (effective), tiny / fast" },
-  { id: "gemma-4-e2b-it",         label: "gemma-4-e2b-it — Gemma 4 2B (effective), tinier / faster" },
+  // Other live Gemini ids — manual selection only
+  { id: "gemini-3.6-flash",       label: "gemini-3.6-flash — previous default" },
+  { id: "gemini-3.5-flash",       label: "gemini-3.5-flash" },
+  { id: "gemini-3.1-pro-preview", label: "gemini-3.1-pro-preview — deepest reasoning (preview)" },
 
-  // Pro and legacy / Gemma 3 family — manual selection only
-  { id: "gemini-2.5-pro",         label: "gemini-2.5-pro — smartest, lowest free quota" },
-  { id: "gemini-2.0-flash",       label: "gemini-2.0-flash — older (usually paid tier only)" },
-  { id: "gemma-3-27b-it",         label: "gemma-3-27b-it — Gemma 3 27B (availability varies)" },
-  { id: "gemma-3-12b-it",         label: "gemma-3-12b-it — Gemma 3 12B (availability varies)" }
+  // Grandfathered: a freshly-created key gets 404 "no longer available to new
+  // users", but keys that already used them keep access. Kept for older keys.
+  { id: "gemini-2.5-pro",         label: "gemini-2.5-pro — legacy, existing keys only" },
+  { id: "gemini-2.5-flash-lite",  label: "gemini-2.5-flash-lite — legacy, existing keys only" }
+  // Removed 2026-08-21 after every id was pinged live: gemini-2.0-flash,
+  // gemma-3-27b-it, gemma-3-12b-it, gemma-4-e4b-it and gemma-4-e2b-it all
+  // return 404 NOT_FOUND and could only ever fail at call time.
 ];
 
 // --- Per-model daily usage tracking ---
@@ -120,11 +126,23 @@ export function pickActiveGeminiModel(chosen) {
   return GEMINI_FALLBACK_CHAIN[GEMINI_FALLBACK_CHAIN.length - 1].id;
 }
 
+// Model ids Google has removed — each returns a hard 404 NOT_FOUND (pinged live
+// 2026-08-21). Remap on read so a saved setting can't leave the app dead.
+// Deliberately excludes gemini-2.5-flash-lite / gemini-2.5-pro: those 404 only
+// for keys that never used them, and still work on older keys.
+const RETIRED_MODELS = [
+  "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-1.5-pro",
+  "gemini-pro", "gemini-3-pro-preview",
+  "gemma-3-27b-it", "gemma-3-12b-it", "gemma-4-e4b-it", "gemma-4-e2b-it"
+];
+
 export function getSettings() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return { ...DEFAULTS };
-    return { ...DEFAULTS, ...JSON.parse(raw) };
+    const merged = { ...DEFAULTS, ...JSON.parse(raw) };
+    if (RETIRED_MODELS.includes(merged.geminiModel)) merged.geminiModel = DEFAULTS.geminiModel;
+    return merged;
   } catch {
     return { ...DEFAULTS };
   }
@@ -359,10 +377,12 @@ async function callGemini(s, { system, user, expectJson, temperature, signal }) 
     // Gemma models on the Gemini API are NOT in the structured-output model set
     // and are NOT part of the tunable-safety system (per Google's docs). So for
     // gemma-* ids we: fold the system prompt into the user turn instead of
-    // sending systemInstruction, omit safetySettings, and — crucially — do NOT
-    // request responseMimeType: application/json (unsupported; it's what broke
-    // Gemma here). parseJsonLoose + the repair pass in callLLMJson already
-    // recover JSON from prose, so dropping JSON mode is safe.
+    // sending systemInstruction, omit safetySettings, and do NOT request
+    // responseMimeType: application/json. Correction (verified live
+    // 2026-08-21): that field is not rejected, it is accepted and silently
+    // IGNORED — so no error ever surfaces, Gemma just answers in prose. Worse,
+    // it often answers with a bulleted preamble containing no braces at all,
+    // which parseJsonLoose cannot recover. The fix is the output-format hint below.
     const isGemma = /^gemma/i.test(modelId);
     const body = {
       contents: [{ role: "user", parts: [{ text: isGemma && system ? `${system}\n\n${user}` : user }] }],
@@ -371,12 +391,26 @@ async function callGemini(s, { system, user, expectJson, temperature, signal }) 
     if (system && !isGemma) body.systemInstruction = { parts: [{ text: system }] };
     if (!isGemma) body.safetySettings = SAFETY_OFF;
     if (expectJson && !isGemma) body.generationConfig.responseMimeType = "application/json";
+    // Gemma has no JSON mode and responseMimeType is accepted-then-IGNORED, so
+    // nothing errors -- it just answers in bulleted prose that can contain no
+    // braces at all. Over 10 runs on a reproducing prompt this wording parsed
+    // 10/10 where a weaker hint parsed 5/10. A '{' model-turn prefill was tried
+    // and REJECTED: it makes the API read the turn as a function call
+    // (MALFORMED_FUNCTION_CALL on ~90% of calls, truncating mid-object).
+    // Verified 2026-08-21.
+    if (expectJson && isGemma) {
+      body.contents[0].parts.push({ text: "\n\nOutput format: a single JSON object and nothing else. No preamble, no plan, no bullet points, no commentary. A ```json fenced block is acceptable. Your entire reply must be the JSON." });
+    }
     // Gemini 2.5 Flash models "think" before answering, drawing from the SAME
     // output budget. On big extraction prompts that thinking can eat the whole
     // budget and return an empty reply (finishReason MAX_TOKENS). Extraction
     // needs no visible reasoning, so disable thinking for JSON calls. (Adapted
     // from the AI GM app.) Gemma has no thinking; Pro can't disable it.
-    if (expectJson && /gemini-2\.5-flash/i.test(modelId)) {
+    // gemini-3.5-flash-lite rejects thinkingBudget with INVALID_ARGUMENT but
+    // accepts thinkingLevel; 2.5 predates thinkingLevel. Verified 2026-08-21.
+    if (expectJson && /^gemini-3/i.test(modelId)) {
+      body.generationConfig.thinkingConfig = { thinkingLevel: "low" };
+    } else if (expectJson && /gemini-2\.5-flash/i.test(modelId)) {
       body.generationConfig.thinkingConfig = { thinkingBudget: 0 };
     }
 
