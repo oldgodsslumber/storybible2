@@ -1,5 +1,5 @@
 // Settings modal — open from any page. Persists LLM config to localStorage.
-import { getSettings, saveSettings, callLLM, isConfigured, GEMINI_MODELS, listGeminiModels, GEMINI_FALLBACK_CHAIN, getDailyUsage } from "./llm.js";
+import { getSettings, saveSettings, callLLM, isConfigured, GEMINI_MODELS, listGeminiModels, GEMINI_FALLBACK_CHAIN, getDailyUsage, GEMINI_DEFAULT_MODEL, GEMINI_MODEL_INFO, isGemmaModel, callLLMDetailed, isRetiredOrAliasModel, normalizeModelId } from "./llm.js?v=20261024";
 
 const NOTICE_KEY = "storybible.llm.notice.acknowledged";
 const FIRST_VISIT_PROMPT_KEY = "storybible.llm.config-prompt.shown";
@@ -13,6 +13,21 @@ function esc(s) {
   }[c]));
 }
 function attr(s) { return esc(s); }
+
+function isKnownModel(id) { return !!GEMINI_MODEL_INFO[id]; }
+
+// Grouped <option>s for the model picker. The writer's saved model is always
+// selectable, even if it isn't in our list (it lands under Custom).
+function modelOptionsHtml(current) {
+  const groups = [
+    { label: "Free tier", ids: GEMINI_MODELS.filter(m => GEMINI_MODEL_INFO[m.id].free && !/legacy/.test(GEMINI_MODEL_INFO[m.id].note)) },
+    { label: "Paid tier only", ids: GEMINI_MODELS.filter(m => !GEMINI_MODEL_INFO[m.id].free) },
+    { label: "Legacy (only keys that used them before)", ids: GEMINI_MODELS.filter(m => /legacy/.test(GEMINI_MODEL_INFO[m.id].note)) }
+  ];
+  const opt = (m) => `<option value="${attr(m.id)}"${m.id === current ? " selected" : ""}>${esc(m.label)}</option>`;
+  return groups.map(g => `<optgroup label="${attr(g.label)}">${g.ids.map(opt).join("")}</optgroup>`).join("")
+    + `<option value="__custom"${isKnownModel(current) ? "" : " selected"}>Custom model id…</option>`;
+}
 
 export function openSettingsModal() {
   const s = getSettings();
@@ -40,49 +55,48 @@ export function openSettingsModal() {
 
         <fieldset id="geminiFields" class="provider-fields">
           <legend>Gemini</legend>
-          <label>API Key <input id="geminiApiKey" type="password" value="${attr(s.geminiApiKey)}" placeholder="AIza..." /></label>
+          <label>API Key <input id="geminiApiKey" type="password" value="${attr(s.geminiApiKey)}" placeholder="Paste your Gemini API key" autocomplete="off" /></label>
           <label>Model
-            <input id="geminiModel" type="text" list="geminiModelOptions" value="${attr(s.geminiModel)}" placeholder="gemini-3.7-flash…" />
-            <datalist id="geminiModelOptions">
-              ${GEMINI_MODELS.map(m => `<option value="${attr(m.id)}">${esc(m.label)}</option>`).join("")}
-            </datalist>
+            <select id="geminiModelSelect">${modelOptionsHtml(s.geminiModel)}</select>
+            <input id="geminiModel" type="text" class="${isKnownModel(s.geminiModel) ? "hidden" : ""}" value="${attr(s.geminiModel)}" placeholder="model id, e.g. ${attr(GEMINI_DEFAULT_MODEL)}" />
+            <span class="muted small" id="customModelWarn" style="color: var(--warn);"></span>
             <div class="model-list-row">
               <button type="button" id="listGeminiModelsBtn" class="ghost small">List models my key can use</button>
               <span id="modelListStatus" class="muted small"></span>
             </div>
             <div id="modelListResults" class="model-list-results"></div>
-            <p class="muted small" style="margin-top:4px;">The dropdown shows commonly-available models. Click "List models" above to see exactly which ones your API key has access to (Gemma availability varies by region/project). Whatever you put here is sent verbatim and shown in the console POST log.</p>
+            <p class="muted small" style="margin-top:4px;">Models current as of October 2026. Google retires and renames models often — "List models my key can use" asks Google directly. Gemini 4 Argon and 3.1 Pro need a key on a paid project.</p>
           </label>
           <div class="provider-help" id="geminiChainStatus">
-            <strong>Today's free-tier usage (this device)</strong>
+            <strong>Today's requests from this browser</strong>
             <ul class="chain-status-list">
               ${(() => {
                 const u = getDailyUsage();
                 return GEMINI_FALLBACK_CHAIN.map(m => {
                   const used = u.counts[m.id] || 0;
-                  const remaining = Math.max(0, m.dailyLimit - used);
-                  const exhausted = used >= m.dailyLimit;
-                  return `<li class="${exhausted ? "exhausted" : ""}">
-                    <code>${esc(m.id)}</code> — <strong>${used}/${m.dailyLimit}</strong> used today
-                    ${exhausted ? `<span class="muted small">(exhausted, auto-falls through)</span>` : `<span class="muted small">(${remaining} left)</span>`}
+                  const spent = !!u.exhausted[m.id];
+                  return `<li class="${spent ? "exhausted" : ""}">
+                    <code>${esc(m.id)}</code> — <strong>${used}</strong> request${used === 1 ? "" : "s"} today
+                    ${spent ? `<span class="muted small">(daily quota used up — falling through)</span>` : ""}
                   </li>`;
                 }).join("");
               })()}
             </ul>
-            <p class="muted small">The app starts with the first model and automatically falls through to the next when one hits its daily limit. Counts reset at local midnight. Manual model picks outside this chain (e.g. gemini-3.1-pro-preview) bypass the chain entirely.</p>
+            <p class="muted small">If your model runs out of free daily quota, the app moves down this list on its own until quota resets at midnight Pacific time. Google doesn't publish exact free-tier limits any more — they're per project, and AI Studio shows yours. Models you pick that aren't on this list (like Gemini 4 Argon) don't fall through.</p>
           </div>
 
           <div class="provider-help">
             <strong>How to get a free Gemini API key</strong>
             <ol>
-              <li>Open <a href="https://aistudio.google.com/app/api-keys" target="_blank" rel="noopener noreferrer">Google AI Studio → API keys</a> in a new tab. <em>(Not the Google Cloud Console — that's a different surface and the keys aren't free-tier-eligible.)</em></li>
+              <li>Open <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio → API keys</a> in a new tab. <em>(Not the Google Cloud Console — that's a different surface and the keys aren't free-tier-eligible.)</em></li>
               <li>Sign in with your Google account if prompted.</li>
-              <li>Click <strong>Create API key</strong> and let AI Studio pick the Google Cloud project for you. AI Studio will use a project without billing enabled, which is what the free tier requires.</li>
-              <li>Copy the key (it starts with <code>AIza</code>) and paste it into the <strong>API Key</strong> field above.</li>
-              <li>Leave the model as <code>gemini-3.7-flash</code> unless you have a reason to change it — flash is fast, free, and works well for this app. <code>gemini-3.5-flash-lite</code> also works.</li>
+              <li>Click <strong>Create API key</strong> and let AI Studio create a new project for it. Free-tier eligibility is per project, and a project with billing enabled doesn't get free-tier quota.</li>
+              <li>Copy the key and paste it into the <strong>API Key</strong> field above. New keys are automatically restricted to the Gemini API, which is what Google now requires.</li>
+              <li>Leave the model on <strong>Gemini 3.8 Flash</strong> unless you have a reason to change it — it's Google's newest free model. <strong>Gemini 3.5 Flash-Lite</strong> is faster and cheaper.</li>
             </ol>
-            <p class="muted small"><strong>If Test connection returns 429 with "limit: 0":</strong> your key was created on a project that isn't eligible for the free tier (usually because billing is enabled). Delete the key in AI Studio and create a new one — let AI Studio pick the project this time.</p>
-            <p class="muted small">The free tier gives generous daily limits. The key stays in this browser's localStorage and is sent only to Google's API — never to any server we control.</p>
+            <p class="muted small"><strong>If Test connection returns 429 with "limit: 0":</strong> the key's project isn't eligible for the free tier (usually because billing is enabled — upgrading doesn't unlock free quota). Create a new key in a new project.</p>
+            <p class="muted small"><strong>If it returns 403:</strong> Google blocks keys it thinks have leaked and rejects old unrestricted keys. Make a fresh one.</p>
+            <p class="muted small">The key stays in this browser's localStorage and is sent only to Google's API, in a request header — never to any server we control.</p>
           </div>
         </fieldset>
 
@@ -96,8 +110,9 @@ export function openSettingsModal() {
           </p>
         </fieldset>
 
-        <label>Temperature
+        <label id="temperatureRow">Temperature <span class="muted small">(Gemma and local models only)</span>
           <input id="temperature" type="number" step="0.05" min="0" max="2" value="${attr(s.temperature)}" />
+          <span class="muted small" id="temperatureNote">Gemini models no longer accept a temperature — Google deprecated it in July 2026 — so this only applies to Gemma and Oobabooga.</span>
         </label>
 
         <div class="connection-row">
@@ -133,6 +148,31 @@ export function openSettingsModal() {
   };
   overlay.querySelector("#oobaBaseUrl")?.addEventListener("input", refresh);
   providerSel.addEventListener("change", refresh);
+
+  const modelSel = overlay.querySelector("#geminiModelSelect");
+  const modelInput = overlay.querySelector("#geminiModel");
+  const currentModel = () => (modelSel.value === "__custom" ? modelInput.value.trim() : modelSel.value);
+  const syncTemperature = () => {
+    const usesTemp = providerSel.value === "ooba" || (providerSel.value === "gemini" && isGemmaModel(currentModel()));
+    overlay.querySelector("#temperatureRow").style.display = usesTemp ? "" : "none";
+  };
+  modelSel.addEventListener("change", () => {
+    const custom = modelSel.value === "__custom";
+    modelInput.classList.toggle("hidden", !custom);
+    if (!custom) modelInput.value = modelSel.value;
+    else modelInput.focus();
+    syncTemperature();
+  });
+  modelInput.addEventListener("input", () => {
+    syncTemperature();
+    const id = modelInput.value.trim();
+    const warn = overlay.querySelector("#customModelWarn");
+    warn.textContent = id && isRetiredOrAliasModel(id)
+      ? `${id} is retired or a floating alias — the app will use ${GEMINI_DEFAULT_MODEL} instead.`
+      : "";
+  });
+  providerSel.addEventListener("change", syncTemperature);
+  syncTemperature();
   refresh();
 
   function setStatus(kind, label) {
@@ -162,10 +202,17 @@ export function openSettingsModal() {
     return {
       provider: providerSel.value,
       geminiApiKey: overlay.querySelector("#geminiApiKey").value.trim(),
-      geminiModel: overlay.querySelector("#geminiModel").value.trim() || "gemini-3.7-flash",
+      geminiModel: (() => {
+        const sel = overlay.querySelector("#geminiModelSelect").value;
+        const typed = overlay.querySelector("#geminiModel").value.trim();
+        return (sel === "__custom" ? typed : sel) || GEMINI_DEFAULT_MODEL;
+      })(),
       oobaBaseUrl: overlay.querySelector("#oobaBaseUrl").value.trim() || "http://127.0.0.1:5000",
       oobaModel: overlay.querySelector("#oobaModel").value.trim() || "local-model",
-      temperature: parseFloat(overlay.querySelector("#temperature").value) || 0.3
+      temperature: (() => {
+        const t = parseFloat(overlay.querySelector("#temperature").value);
+        return Number.isFinite(t) ? t : 0.3; // 0 is a valid (deterministic) setting
+      })()
     };
   }
 
@@ -181,15 +228,15 @@ export function openSettingsModal() {
     statusEl.textContent = "Querying Google…";
     resultsEl.innerHTML = "";
     try {
-      const models = await listGeminiModels(key);
+      const models = (await listGeminiModels(key)).filter(m => !isRetiredOrAliasModel(m.id));
       statusEl.textContent = `${models.length} model${models.length === 1 ? "" : "s"} available.`;
       if (models.length === 0) {
         resultsEl.innerHTML = `<p class="muted small">Google returned no models supporting generateContent for this key.</p>`;
         return;
       }
-      // Sort: Gemini first, then Gemma, then everything else
+      // Sort: models this app knows first, then other Gemini, then Gemma
       models.sort((a, b) => {
-        const rank = (m) => m.id.startsWith("gemini-") ? 0 : m.id.startsWith("gemma-") ? 1 : 2;
+        const rank = (m) => GEMINI_MODEL_INFO[m.id] ? 0 : m.id.startsWith("gemini-") ? 1 : m.id.startsWith("gemma-") ? 2 : 3;
         const ra = rank(a), rb = rank(b);
         if (ra !== rb) return ra - rb;
         return a.id.localeCompare(b.id);
@@ -202,8 +249,20 @@ export function openSettingsModal() {
       `;
       resultsEl.querySelectorAll(".model-pick").forEach(btn => {
         btn.addEventListener("click", () => {
-          overlay.querySelector("#geminiModel").value = btn.dataset.id;
-          statusEl.textContent = `Set model to ${btn.dataset.id}.`;
+          const id = btn.dataset.id;
+          const sel = overlay.querySelector("#geminiModelSelect");
+          const input = overlay.querySelector("#geminiModel");
+          if ([...sel.options].some(o => o.value === id)) {
+            sel.value = id;
+            input.classList.add("hidden");
+          } else {
+            sel.value = "__custom";
+            input.classList.remove("hidden");
+          }
+          input.value = id;
+          sel.dispatchEvent(new Event("change"));
+          if (sel.value === "__custom") input.value = id;
+          statusEl.textContent = `Set model to ${id}.`;
         });
       });
     } catch (err) {
@@ -218,22 +277,27 @@ export function openSettingsModal() {
       setStatus("err", "Pick a provider first");
       return;
     }
-    // Save current form values so callLLM picks them up
-    saveSettings(form);
+    if (form.provider === "gemini" && !form.geminiApiKey) {
+      setStatus("err", "Paste an API key first");
+      return;
+    }
+    // Test with the form's values for this one call only. Nothing is written
+    // to storage, so a Save made while the test runs always sticks.
     setStatus("pending", "Testing…");
     overlay.querySelector("#testConnBtn").disabled = true;
     try {
-      const reply = await callLLM({
+      const { text: reply, model } = await callLLMDetailed({
         system: "You are a connection test. Reply with the literal word OK and nothing else.",
         user: "ping",
         expectJson: false,
-        temperature: 0
+        temperature: 0,
+        settings: form
       });
-      if ((reply || "").toLowerCase().includes("ok")) {
-        setStatus("ok", "Connected");
-      } else {
-        setStatus("ok", "Connected (unexpected reply)");
-      }
+      const asked = form.provider === "gemini" ? normalizeModelId(form.geminiModel) : null;
+      const who = form.provider === "gemini"
+        ? (model === asked ? ` — ${model}` : ` — but ${asked} hit its quota limit, so ${model} answered`)
+        : "";
+      setStatus("ok", ((reply || "").toLowerCase().includes("ok") ? "Connected" : "Connected (unexpected reply)") + who);
     } catch (err) {
       console.error(err);
       setStatus("err", "Failed: " + (err.message || "unknown"));

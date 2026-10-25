@@ -7,7 +7,7 @@ import {
   signOut
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { firebaseConfig } from "../firebase-config.js";
+import { firebaseConfig } from "../firebase-config.js?v=20261024";
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
@@ -57,6 +57,18 @@ export const KANBAN_STAGES = [
   { id: "done",     label: "Done" }
 ];
 
+// Escape closes the topmost dialog the same way its ✕ / Cancel button would.
+// Busy and refresh overlays are skipped (their Cancel/Stop aborts work), as
+// are dialogs that require an explicit choice (no close or cancel button).
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape" || e.defaultPrevented) return;
+  const overlays = [...document.querySelectorAll(".modal-overlay")]
+    .filter(o => !o.classList.contains("busy-overlay") && !o.classList.contains("refresh-overlay"));
+  const top = overlays[overlays.length - 1];
+  const btn = top?.querySelector(".close-modal, .modal-actions .cancel");
+  if (btn) { e.preventDefault(); btn.click(); }
+});
+
 // Busy overlay used during LLM work. Returns { update, close, controller }.
 // The controller is an AbortController whose signal can be passed to fetch().
 export function openBusyOverlay(label) {
@@ -65,10 +77,13 @@ export function openBusyOverlay(label) {
   overlay.innerHTML = `
     <div class="modal busy-modal">
       <div class="busy-spinner"></div>
-      <p class="busy-label">${label || "Working…"}</p>
+      <p class="busy-label"></p>
       <button class="ghost small busy-cancel">Cancel</button>
     </div>
   `;
+  // textContent, never innerHTML: labels carry card titles, which can come
+  // straight from LLM output.
+  overlay.querySelector(".busy-label").textContent = label || "Working…";
   document.body.appendChild(overlay);
   const controller = new AbortController();
   const labelEl = overlay.querySelector(".busy-label");

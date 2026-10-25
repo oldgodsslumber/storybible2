@@ -26,8 +26,10 @@
   transition: border-color 0.15s;
 }
 .project-card:hover { border-color: var(--accent); }
+.project-card { display: flex; }
 .project-link {
   display: block;
+  flex: 1; /* whole card is clickable, even when a neighbour row is taller */
   padding: 16px 18px;
   color: var(--text);
 }

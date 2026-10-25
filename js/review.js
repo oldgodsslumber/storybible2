@@ -5,15 +5,16 @@
 // arc.summary). If summaries are missing, the prompt instructs the model to
 // use raw content as a fallback.
 
-import { db } from "./shared.js";
+import { db } from "./shared.js?v=20261024";
 import {
   doc, updateDoc, addDoc, collection, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { callLLM, parseJsonLoose, isConfigured, callLLMJson } from "./llm.js";
-import { openSettingsModal } from "./settings.js?v=20260530";
-import { logAudit } from "./audit.js";
-import { openBusyOverlay } from "./shared.js";
-import { buildProjectContext } from "./story-settings.js";
+import { callLLM, parseJsonLoose, isConfigured, callLLMJson } from "./llm.js?v=20261024";
+import { openSettingsModal } from "./settings.js?v=20261024";
+import { logAudit } from "./audit.js?v=20261024";
+import { openBusyOverlay } from "./shared.js?v=20261024";
+import { buildProjectContext, sortScenesByOutline, getColumnsForProject, defaultColumnId, resolveColumnHint } from "./story-settings.js?v=20261024";
+import { blankFieldsForType } from "./shared.js?v=20261024";
 
 function ctx(state) { return buildProjectContext(state?.project); }
 
@@ -23,7 +24,11 @@ async function runLLMAction(label, fn) {
   console.log("[llm-action] start:", label);
   const busy = openBusyOverlay(label);
   try {
-    const result = await fn();
+    // Race against Cancel so a cancelled call never surfaces its result.
+    const result = await Promise.race([
+      fn(busy),
+      new Promise((_, reject) => busy.signal.addEventListener("abort", () => reject(busy.signal.reason), { once: true }))
+    ]);
     console.log("[llm-action] ok:", label, result);
     busy.close();
     return { ok: true, result };
@@ -130,11 +135,11 @@ async function ensureLLM() {
 
 // Thin wrapper so all callsites in this module use the shared
 // JSON-with-repair helper from llm.js.
-const callJson = (system, user) => callLLMJson({ system, user });
+const callJson = (system, user, signal) => callLLMJson({ system, user, signal });
 
 // ---------- Public API ----------
 
-export async function reviewCharacterArc(state, characterId) {
+export async function reviewCharacterArc(state, characterId, { signal } = {}) {
   if (!await ensureLLM()) return null;
   const ch = state.cards.get(characterId);
   if (!ch) return null;
@@ -144,10 +149,10 @@ export async function reviewCharacterArc(state, characterId) {
     scenesInOrder: scenes.map(pickScene),
     themes: themeList(state)
   };
-  return callJson(ctx(state) + ARC_REVIEW_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`);
+  return callJson(ctx(state) + ARC_REVIEW_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`, signal);
 }
 
-export async function generateSynopsis(state) {
+export async function generateSynopsis(state, { signal } = {}) {
   if (!await ensureLLM()) return null;
   const payload = {
     project: { title: state.project.title, logline: state.project.logline, themeText: state.project.themeText },
@@ -155,20 +160,20 @@ export async function generateSynopsis(state) {
     characters: characterList(state).map(pickCharacter),
     scenesInOrder: sceneList(state).map(pickScene)
   };
-  return callJson(ctx(state) + SYNOPSIS_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`);
+  return callJson(ctx(state) + SYNOPSIS_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`, signal);
 }
 
-export async function themeCoherence(state) {
+export async function themeCoherence(state, { signal } = {}) {
   if (!await ensureLLM()) return null;
   const payload = {
     themes: themeList(state),
     characters: characterList(state).map(pickCharacter),
     scenes: sceneList(state).map(pickScene)
   };
-  return callJson(ctx(state) + THEME_COHERENCE_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`);
+  return callJson(ctx(state) + THEME_COHERENCE_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`, signal);
 }
 
-export async function generateScene(state, { beforeSceneId, afterSceneId }) {
+export async function generateScene(state, { beforeSceneId, afterSceneId, columnId }, { signal } = {}) {
   if (!await ensureLLM()) return null;
   const before = beforeSceneId ? state.cards.get(beforeSceneId) : null;
   const after  = afterSceneId  ? state.cards.get(afterSceneId)  : null;
@@ -178,12 +183,13 @@ export async function generateScene(state, { beforeSceneId, afterSceneId }) {
     themes: themeList(state),
     existingCharacterNames: characterList(state).map(c => c.title),
     existingLocationNames:  locationList(state).map(c => c.title),
-    nearbyScenes: sceneList(state).slice(0, 30).map(pickScene)
+    targetColumn: columnLabel(state, columnId || before?.fields?.columnId || after?.fields?.columnId),
+    nearbyScenes: nearbyScenes(state, before || after, 30).map(pickScene)
   };
-  return callJson(ctx(state) + SCENE_GEN_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`);
+  return callJson(ctx(state) + SCENE_GEN_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`, signal);
 }
 
-export async function suggestTraits(state, characterId) {
+export async function suggestTraits(state, characterId, { signal } = {}) {
   if (!await ensureLLM()) return null;
   const ch = state.cards.get(characterId);
   if (!ch) return null;
@@ -192,10 +198,10 @@ export async function suggestTraits(state, characterId) {
     themes: themeList(state),
     otherCharacters: characterList(state).filter(c => c.id !== characterId).map(pickCharacter)
   };
-  return callJson(ctx(state) + TRAIT_SUGGEST_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`);
+  return callJson(ctx(state) + TRAIT_SUGGEST_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`, signal);
 }
 
-export async function analyzeArcTension(state, arcId, newSummary) {
+export async function analyzeArcTension(state, arcId, newSummary, { signal } = {}) {
   if (!await ensureLLM()) return null;
   const arc = state.cards.get(arcId);
   if (!arc) return null;
@@ -204,7 +210,7 @@ export async function analyzeArcTension(state, arcId, newSummary) {
     arc: { title: arc.title, newSummary },
     scenes: scenes.map(pickScene)
   };
-  return callJson(ctx(state) + TENSION_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`);
+  return callJson(ctx(state) + TENSION_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`, signal);
 }
 
 // ---------- Helpers: list / pick ----------
@@ -212,10 +218,24 @@ export async function analyzeArcTension(state, arcId, newSummary) {
 function characterList(state) {
   return [...state.cards.values()].filter(c => c.type === "character" && !c.archived);
 }
+// Scenes in story order — the order the writer sees on the Outline board.
 function sceneList(state) {
-  return [...state.cards.values()]
-    .filter(c => c.type === "scene" && !c.archived)
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  return sortScenesByOutline(
+    [...state.cards.values()].filter(c => c.type === "scene" && !c.archived),
+    state.project
+  );
+}
+// Up to n scenes centred on the anchor scene, in story order.
+function nearbyScenes(state, anchor, n) {
+  const all = sceneList(state);
+  const i = anchor ? all.findIndex(s => s.id === anchor.id) : -1;
+  if (i < 0) return all.slice(0, n);
+  const start = Math.max(0, Math.min(i - Math.floor(n / 2), all.length - n));
+  return all.slice(start, start + n);
+}
+function columnLabel(state, colId) {
+  if (!colId) return null;
+  return getColumnsForProject(state.project).find(c => c.id === colId)?.label || null;
 }
 function locationList(state) {
   return [...state.cards.values()].filter(c => c.type === "location" && !c.archived);
@@ -256,7 +276,7 @@ function pickScene(s) {
   const f = s.fields || {};
   return {
     title: s.title,
-    order: s.order ?? 0,
+    column: s.fields?.columnId || "",
     shortDescription: f.shortDescription || "",
     ragSummary: f.ragSummary || "",
     characterIds: f.characterIds || [],
@@ -267,56 +287,83 @@ function pickScene(s) {
 
 // ---------- Apply scene-gen result to Firestore ----------
 
+// position: { afterId } / { beforeId } places the scene next to that scene in
+// its column; { columnId } picks the column (appends when no neighbour is
+// given). Every scene needs a columnId — the Outline board is built from it.
 export async function insertGeneratedScene(state, projectId, gen, position) {
-  // position: { afterId } means insert right after that scene; otherwise append.
-  // We'll set the new scene's order to be the average of neighboring orders,
-  // then reflow.
-  const ordered = sceneList(state);
-  let order;
-  if (position?.afterId) {
-    const i = ordered.findIndex(s => s.id === position.afterId);
-    if (i < 0) order = ordered.length;
-    else if (i === ordered.length - 1) order = ordered[i].order + 1;
-    else order = (ordered[i].order + ordered[i + 1].order) / 2;
-  } else if (position?.beforeId) {
-    const i = ordered.findIndex(s => s.id === position.beforeId);
-    if (i <= 0) order = (ordered[0]?.order ?? 0) - 1;
-    else order = (ordered[i].order + ordered[i - 1].order) / 2;
-  } else {
-    order = (ordered[ordered.length - 1]?.order ?? -1) + 1;
-  }
+  const anchorId = position?.afterId || position?.beforeId || null;
+  const anchor = anchorId ? state.cards.get(anchorId) : null;
+  const columnId = position?.columnId || anchor?.fields?.columnId || defaultColumnId(state.project);
+  const colCards = [...state.cards.values()]
+    .filter(c => !c.archived && (c.type === "scene" || c.type === "beat") && c.fields?.columnId === columnId)
+    .sort((x, y) => (x.fields?.columnOrder ?? 0) - (y.fields?.columnOrder ?? 0));
+  let insertAt = colCards.length;
+  const anchorIdx = anchor ? colCards.findIndex(c => c.id === anchor.id) : -1;
+  if (anchorIdx >= 0) insertAt = position?.afterId ? anchorIdx + 1 : anchorIdx;
 
-  const characterIds = matchNamesToIds(state, "character", gen.suggestedCharacterNames || []);
-  const locationIds  = matchNamesToIds(state, "location",  gen.suggestedLocationNames  || []);
+  const characterIds = matchNamesToIds(state, "character", toList(gen.suggestedCharacterNames));
+  const locationIds  = matchNamesToIds(state, "location",  toList(gen.suggestedLocationNames));
+  const shortDescription = String(gen.shortDescription || "");
+  const longDescription  = String(gen.longDescription || "");
 
   const data = {
     type: "scene",
-    title: gen.title || "Untitled scene",
+    title: String(gen.title || "").trim() || "Untitled scene",
     archived: false,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-    order,
+    order: 0,
     fields: {
-      shortDescription: gen.shortDescription || "",
-      longDescription:  gen.longDescription  || "",
-      ragSummary: gen.shortDescription || null,
-      ragSummaryStale: !!gen.longDescription,
-      characterIds, locationIds, arcIds: []
+      ...blankFieldsForType("scene"),
+      shortDescription,
+      longDescription,
+      ragSummary: shortDescription || null,
+      ragSummaryStale: !!longDescription,
+      characterIds, locationIds,
+      columnId,
+      columnOrder: insertAt
     }
   };
   const ref = await addDoc(collection(db, "users", state.user.uid, "projects", projectId, "cards"), data);
   state.cards.set(ref.id, { id: ref.id, ...data });
-  await logAudit(state.user.uid, projectId, [{
-    entityType: "card", entityId: ref.id, field: "created", oldValue: null,
-    newValue: { type: "scene", title: data.title, source: "scene-gen" }
-  }], state.project);
+
+  // Shift the cards after the insertion point down one slot.
+  for (let i = insertAt; i < colCards.length; i++) {
+    const c = colCards[i];
+    c.fields = c.fields || {};
+    c.fields.columnOrder = i + 1;
+    try {
+      await updateDoc(doc(db, "users", state.user.uid, "projects", projectId, "cards", c.id), { "fields.columnOrder": i + 1 });
+    } catch (err) {
+      console.warn("[scene-gen] could not shift columnOrder for", c.id, err);
+    }
+  }
+  try {
+    await logAudit(state.user.uid, projectId, [{
+      entityType: "card", entityId: ref.id, field: "created", oldValue: null,
+      newValue: { type: "scene", title: data.title, columnId, source: "scene-gen" }
+    }], state.project);
+  } catch (err) {
+    // The scene is saved — don't report the insert as failed (a retry would duplicate it).
+    console.warn("[scene-gen] scene saved, but audit log failed", err);
+  }
   return ref.id;
+}
+
+// LLM output is untrusted in shape: keep only object entries of a list.
+function objList(v) {
+  return Array.isArray(v) ? v.filter(x => x && typeof x === "object" && !Array.isArray(x)) : [];
+}
+
+function toList(v) {
+  if (Array.isArray(v)) return v.flat(Infinity).filter(x => typeof x === "string" && x.trim());
+  return typeof v === "string" && v.trim() ? [v] : [];
 }
 
 function matchNamesToIds(state, type, names) {
   const out = [];
   for (const n of names) {
-    const card = [...state.cards.values()].find(c => c.type === type && !c.archived && c.title.toLowerCase() === n.toLowerCase());
+    const card = [...state.cards.values()].find(c => c.type === type && !c.archived && (c.title || "").toLowerCase() === n.toLowerCase());
     if (card) out.push(card.id);
   }
   return out;
@@ -374,6 +421,8 @@ export async function createFoilCharacter(state, projectId, foil) {
   if (!name || name === "[unnamed foil]") {
     throw new Error("Foil character has no name — give it a name in the editor after creation.");
   }
+  const clash = [...state.cards.values()].find(c => c.type === "character" && !c.archived && (c.title || "").trim().toLowerCase() === name.toLowerCase());
+  if (clash) throw new Error(`A character named "${clash.title}" already exists.`);
   const data = {
     type: "character",
     title: name,
@@ -382,21 +431,23 @@ export async function createFoilCharacter(state, projectId, foil) {
     updatedAt: serverTimestamp(),
     order: 0,
     fields: {
-      role: foil.role || "",
-      physicalDescription: "",
-      age: "",
-      history: [],
-      traits: Array.isArray(foil.traits) ? foil.traits.slice() : [],
+      ...blankFieldsForType("character"),
+      role: String(foil.role || ""),
+      traits: toList(foil.traits),
       storyRoleSummary: foil.rationale || null,
       storyRoleSummaryStale: !!foil.rationale  // we want this regenerated cleanly on next refresh
     }
   };
   const ref = await addDoc(collection(db, "users", state.user.uid, "projects", projectId, "cards"), data);
   state.cards.set(ref.id, { id: ref.id, ...data });
-  await logAudit(state.user.uid, projectId, [{
-    entityType: "card", entityId: ref.id, field: "created",
-    oldValue: null, newValue: { type: "character", title: name, source: "foil-suggestion" }
-  }], state.project);
+  try {
+    await logAudit(state.user.uid, projectId, [{
+      entityType: "card", entityId: ref.id, field: "created",
+      oldValue: null, newValue: { type: "character", title: name, source: "foil-suggestion" }
+    }], state.project);
+  } catch (err) {
+    console.warn("[foil] character saved, but audit log failed", err);
+  }
   return ref.id;
 }
 
@@ -409,18 +460,22 @@ export async function applyTraitSuggestions(state, projectId, characterId, sugge
   const traits = Array.isArray(ch.fields.traits) ? ch.fields.traits.slice() : [];
   const audits = [];
   for (const s of suggestions) {
-    if (!s.text) continue;
+    if (!s?.text || typeof s.text !== "string") continue;
     traits.push(s.text);
     audits.push({ entityType: "card", entityId: characterId, field: "traits", oldValue: null, newValue: s.text });
   }
-  ch.fields.traits = traits;
-  ch.fields.storyRoleSummaryStale = true;
   await updateDoc(doc(db, "users", state.user.uid, "projects", projectId, "cards", characterId), {
     "fields.traits": traits,
     "fields.storyRoleSummaryStale": true,
     updatedAt: serverTimestamp()
   });
-  if (audits.length) await logAudit(state.user.uid, projectId, audits, state.project);
+  ch.fields.traits = traits;
+  ch.fields.storyRoleSummaryStale = true;
+  try {
+    if (audits.length) await logAudit(state.user.uid, projectId, audits, state.project);
+  } catch (err) {
+    console.warn("[traits] saved, but audit log failed", err);
+  }
 }
 
 // ---------- Review Panel UI ----------
@@ -489,7 +544,7 @@ function renderCharacterMode(body, state, projectId) {
     const out = body.querySelector("#charReviewOut");
     const { ok, result: r } = await runLLMAction(
       "Reviewing character arc",
-      () => reviewCharacterArc(state, id)
+      (busy) => reviewCharacterArc(state, id, { signal: busy.signal })
     );
     if (!ok || !r) { out.innerHTML = ""; return; }
     // Persist the prose parts to the character card so the wiki view and
@@ -510,11 +565,11 @@ function renderCharacterMode(body, state, projectId) {
           <h3>What kinds of scenes will move this arc</h3>
           <div class="review-prose">${proseToHtml(r.sceneTypeGuidance)}</div>
         </section>` : ""}
-      ${Array.isArray(r.recommendedScenes) && r.recommendedScenes.length ? `
+      ${objList(r.recommendedScenes).length ? `
         <section class="review-section">
           <h3>Recommended scenes</h3>
           <ul class="review-suggestion-list" id="recScenes">
-            ${r.recommendedScenes.map((s, i) => `
+            ${objList(r.recommendedScenes).map((s, i) => `
               <li class="review-suggestion">
                 <div class="review-suggestion-head">
                   <strong>${esc(s.title || "(untitled)")}</strong>
@@ -527,18 +582,18 @@ function renderCharacterMode(body, state, projectId) {
             `).join("")}
           </ul>
         </section>` : ""}
-      ${Array.isArray(r.foilCharacters) && r.foilCharacters.length ? `
+      ${objList(r.foilCharacters).length ? `
         <section class="review-section">
           <h3>Foil character suggestions</h3>
           <p class="muted small">Characters whose existence would illuminate this arc by contrast — different angles on the same theme.</p>
           <ul class="review-suggestion-list" id="recFoils">
-            ${r.foilCharacters.map((f, i) => `
+            ${objList(r.foilCharacters).map((f, i) => `
               <li class="review-suggestion">
                 <div class="review-suggestion-head">
                   <strong>${esc(f.name || "(unnamed)")}</strong>
                   ${f.role ? `<span class="muted small">— ${esc(f.role)}</span>` : ""}
                 </div>
-                ${Array.isArray(f.traits) && f.traits.length ? `<p class="muted small">Traits: ${f.traits.map(esc).join(", ")}</p>` : ""}
+                ${toList(f.traits).length ? `<p class="muted small">Traits: ${toList(f.traits).map(esc).join(", ")}</p>` : ""}
                 ${f.rationale ? `<p class="muted small"><strong>Why:</strong> ${esc(f.rationale)}</p>` : ""}
                 <button class="ghost small create-foil" data-idx="${i}">Create character</button>
               </li>
@@ -551,27 +606,20 @@ function renderCharacterMode(body, state, projectId) {
     out.querySelectorAll(".insert-scene").forEach(btn => {
       btn.addEventListener("click", async () => {
         const idx = parseInt(btn.dataset.idx, 10);
-        const proposal = r.recommendedScenes[idx];
+        const proposal = objList(r.recommendedScenes)[idx];
         if (!proposal) return;
         btn.disabled = true;
         btn.textContent = "Inserting…";
         try {
-          const newId = await insertGeneratedScene(state, projectId, {
+          const columnId = resolveColumnHint(proposal.columnHint, getColumnsForProject(state.project), defaultColumnId(state.project));
+          await insertGeneratedScene(state, projectId, {
             title: proposal.title,
             shortDescription: proposal.shortDescription || "",
             longDescription: "",
             rationale: proposal.rationale || "",
-            suggestedCharacterNames: [],
+            suggestedCharacterNames: [state.cards.get(id)?.title].filter(Boolean),
             suggestedLocationNames: []
-          }, null);
-          // Apply column hint if present
-          if (proposal.columnHint) {
-            const card = state.cards.get(newId);
-            if (card) {
-              card.fields = card.fields || {};
-              card.fields.columnId = proposal.columnHint;
-            }
-          }
+          }, { columnId });
           btn.textContent = "Inserted ✓";
         } catch (err) {
           console.error("[review] insert scene failed", err);
@@ -586,7 +634,7 @@ function renderCharacterMode(body, state, projectId) {
     out.querySelectorAll(".create-foil").forEach(btn => {
       btn.addEventListener("click", async () => {
         const idx = parseInt(btn.dataset.idx, 10);
-        const foil = r.foilCharacters[idx];
+        const foil = objList(r.foilCharacters)[idx];
         if (!foil) return;
         btn.disabled = true;
         btn.textContent = "Creating…";
@@ -614,7 +662,7 @@ function renderSynopsisMode(body, state) {
     const out = body.querySelector("#synopsisOut");
     const { ok, result: r } = await runLLMAction(
       "Generating synopsis",
-      () => generateSynopsis(state)
+      (busy) => generateSynopsis(state, { signal: busy.signal })
     );
     if (!ok || !r) { out.innerHTML = ""; return; }
     out.innerHTML = `<div class="review-prose">${proseToHtml(r.synopsis || "")}</div>`;
@@ -656,16 +704,17 @@ function renderArcsMode(body, state, projectId, onChanged) {
       }
       const { ok, result: r } = await runLLMAction(
         "Analyzing arc tension",
-        () => analyzeArcTension(state, arc.id, newSummary)
+        (busy) => analyzeArcTension(state, arc.id, newSummary, { signal: busy.signal })
       );
       if (!ok) return;
-      if (!r || !r.tensions || r.tensions.length === 0) {
+      const tensions = objList(r?.tensions);
+      if (tensions.length === 0) {
         tensionBox.innerHTML = `<p class="muted small">No scene tensions detected with the new summary.</p>`;
       } else {
         tensionBox.innerHTML = `
           <h4>Scenes in tension</h4>
           <ul class="tension-list">
-            ${r.tensions.map(t => `
+            ${tensions.map(t => `
               <li>
                 <div class="tension-scene"><strong>${esc(t.sceneTitle)}</strong></div>
                 <div class="muted small">Problem: ${esc(t.problem)}</div>
@@ -690,16 +739,16 @@ function renderThemeMode(body, state) {
     const out = body.querySelector("#themeOut");
     const { ok, result: r } = await runLLMAction(
       "Analyzing theme coherence",
-      () => themeCoherence(state)
+      (busy) => themeCoherence(state, { signal: busy.signal })
     );
     if (!ok || !r) { out.innerHTML = ""; return; }
-    const perTheme = (r.perTheme || []).map(t => `
+    const perTheme = objList(r.perTheme).map(t => ({ ...t, supporting: objList(t.supporting), disconnected: objList(t.disconnected) })).map(t => `
         <section class="theme-block">
           <h3>${esc(t.theme)}</h3>
-          ${t.supporting?.length ? `
+          ${t.supporting.length ? `
             <h4>Supporting</h4>
             <ul>${t.supporting.map(x => `<li><strong>${esc(x.name)}</strong> <span class="muted small">(${esc(x.type)})</span> — ${esc(x.note)}</li>`).join("")}</ul>` : ""}
-          ${t.disconnected?.length ? `
+          ${t.disconnected.length ? `
             <h4>Disconnected</h4>
             <ul class="disconnected">${t.disconnected.map(x => `<li><strong>${esc(x.name)}</strong> <span class="muted small">(${esc(x.type)})</span> — ${esc(x.note)}</li>`).join("")}</ul>` : ""}
         </section>
@@ -750,13 +799,21 @@ export function openTraitSuggestModal(suggestions, { onApply }) {
   const close = () => overlay.remove();
   overlay.querySelector(".close-modal").addEventListener("click", close);
   overlay.querySelector(".cancel").addEventListener("click", close);
-  overlay.querySelector(".save").addEventListener("click", () => {
+  const saveBtn = overlay.querySelector(".save");
+  saveBtn.addEventListener("click", async () => {
     const picked = [];
     list.querySelectorAll('input[type=checkbox]').forEach(cb => {
       if (cb.checked) picked.push(suggestions[parseInt(cb.dataset.idx, 10)]);
     });
-    close();
-    onApply?.(picked);
+    saveBtn.disabled = true;
+    try {
+      await onApply?.(picked);
+      close();
+    } catch (err) {
+      console.error("[traits] apply failed", err);
+      alert("Could not add traits: " + (err?.message || err));
+      saveBtn.disabled = false;
+    }
   });
 }
 
@@ -791,15 +848,26 @@ export function openSceneProposalModal(gen, { onAccept, onCancel }) {
   const close = () => overlay.remove();
   overlay.querySelector(".close-modal").addEventListener("click", () => { close(); onCancel?.(); });
   overlay.querySelector(".cancel").addEventListener("click", () => { close(); onCancel?.(); });
-  overlay.querySelector(".accept").addEventListener("click", () => {
+  const acceptBtn = overlay.querySelector(".accept");
+  acceptBtn.addEventListener("click", async () => {
     const edited = {
       ...gen,
       title: overlay.querySelector("#genTitle").value.trim(),
       shortDescription: overlay.querySelector("#genShort").value.trim(),
       longDescription:  overlay.querySelector("#genLong").value.trim()
     };
-    close();
-    onAccept?.(edited);
+    // Keep the modal (and the writer's edits) until the insert succeeds.
+    acceptBtn.disabled = true;
+    acceptBtn.textContent = "Inserting…";
+    try {
+      await onAccept?.(edited);
+      close();
+    } catch (err) {
+      console.error("[scene-gen] insert failed", err);
+      alert("Could not insert the scene: " + (err?.message || err));
+      acceptBtn.disabled = false;
+      acceptBtn.textContent = "Insert scene";
+    }
   });
 }
 

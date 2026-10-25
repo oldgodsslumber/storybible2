@@ -1,7 +1,7 @@
 import {
   auth, db, signIn, onAuthChange, renderUserArea, show, hide, formatDate
-} from "./shared.js";
-import { mountLlmConfigBanner } from "./settings.js?v=20260530";
+} from "./shared.js?v=20261024";
+import { mountLlmConfigBanner } from "./settings.js?v=20261024";
 import {
   collection, doc, getDocs, addDoc, query, where, orderBy, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
@@ -119,7 +119,7 @@ async function createProject() {
   const themeText = els.ideaDump.value.trim();
   console.log("[dashboard] createProject", { titleChars: title.length, themeChars: themeText.length });
   if (!themeText) {
-    const ok = confirm(`Heads up: you haven't typed anything in the "What's your story about?" textarea.\n\nWithout idea-dump text, the LLM has nothing to extract — you'll land on an empty project. You can paste an idea dump into the side panel later and click "Parse with LLM" instead.\n\nCreate empty project anyway?`);
+    const ok = confirm(`Heads up: you haven't typed anything in the "What's your story about?" textarea.\n\nWithout idea-dump text, the LLM has nothing to extract — you'll land on an empty project. You can paste an idea dump into the Notes panel later and click "Process" instead.\n\nCreate empty project anyway?`);
     if (!ok) return;
   }
   console.log("[dashboard] currentUser:", currentUser?.uid || "(null)");

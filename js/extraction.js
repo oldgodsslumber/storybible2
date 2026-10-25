@@ -1,8 +1,8 @@
 // LLM extraction flows: idea-dump extraction, side-panel note parsing,
 // approval modal (extraction vs. inference), and gap-analysis wizard.
 
-import { callLLM, parseJsonLoose, isConfigured } from "./llm.js";
-import { buildProjectContext } from "./story-settings.js";
+import { callLLMJson, isConfigured, wasTruncated } from "./llm.js?v=20261024";
+import { buildProjectContext } from "./story-settings.js?v=20261024";
 
 // State ref so extraction prompts can include project context.
 let STATE_REF = null;
@@ -33,7 +33,7 @@ And BEATS — structural moments larger than a single scene but smaller than an 
 
 And SCENES — the smallest atomic moments. A scene is one continuous event in one location. If the writer describes a specific moment, encounter, conversation, or action set-piece, propose it as a scene.
 
-For BOTH scenes and beats, include a "columnHint" — the column ID from the Outline columns list in the PROJECT CONTEXT above. Match the writer's words ("during the prologue" → prologue; "in Act 3" → act-3; "after the story ends" → epilogue). If unclear, use the default main column shown in PROJECT CONTEXT.
+For BOTH scenes and beats, include a "columnHint" — the column ID from the Outline columns list in the PROJECT CONTEXT above. Match the writer's words to the column LABELS listed there ("during the prologue" → prologue; "in Act 3" → whichever column is labelled Act 3 / Act III — column IDs are positional and do NOT match act numbers; "after the story ends" → epilogue). If unclear, use the default main column shown in PROJECT CONTEXT.
 
 Return ONLY a JSON object with this exact shape:
 {
@@ -83,7 +83,7 @@ For themes, concepts, characters, locations, and beats, SEMANTIC match matters m
   - Existing location "the dam" — note mentions "Hoover Dam" → UPDATE the existing one (perhaps proposing it be renamed) rather than adding a duplicate.
 A new entity is only justified when no existing entity captures the same concept. Err on the side of UPDATES — duplicates poison the story bible and the writer hates them.
 
-For BOTH new scenes and new beats, include a "columnHint" — the column ID from the Outline columns list in the PROJECT CONTEXT above. Match the writer's words ("during the prologue" → prologue; "in Act 3" → act-3; "after the story ends" → epilogue; "in the midpoint of the second act" → the act containing the midpoint, usually act-2 or act-3). If unclear, use the default main column shown in PROJECT CONTEXT.
+For BOTH new scenes and new beats, include a "columnHint" — the column ID from the Outline columns list in the PROJECT CONTEXT above. Match the writer's words to the column LABELS listed there ("during the prologue" → prologue; "in Act 3" → whichever column is labelled Act 3 / Act III — column IDs are positional and do NOT match act numbers; "after the story ends" → epilogue; "at the midpoint" → the column labelled Mid-Point or the act containing it). If unclear, use the default main column shown in PROJECT CONTEXT.
 
 Same EXTRACTION vs. INFERENCE rule applies: only mark "extraction" if the writer actually said it.
 
@@ -124,40 +124,50 @@ Return ONLY this JSON shape:
     {
       "id": "q1",
       "question": "short, specific question",
-      "kind": "free-text" | "chips",
-      "options": ["chip1","chip2",...],          // only if kind=chips
-      "targetEntityName": "Jack" | null,         // who/what this is about
-      "targetEntityType": "character|theme|location|project" | null,
-      "targetField": "traits|history|role|description|pillars|logline" | null,
+      "kind": "free-text or chips",
+      "options": ["chip1", "chip2"],
+      "targetEntityName": "Jack",
+      "targetEntityType": "character|theme|location|project",
+      "targetField": "traits|history|role|description|pillars|logline",
       "rationale": "why I'm asking (one sentence)"
     }
   ]
 }
 
+- "kind" is exactly "free-text" or "chips"; include "options" only for chips.
+- Use null for targetEntityName / targetEntityType / targetField when they don't apply.
+
 No prose outside the JSON.`;
 
 // ---------- LLM-callable flows ----------
 
-export async function extractFromIdeaDump(themeText) {
+export async function extractFromIdeaDump(themeText, { signal } = {}) {
   if (!isConfigured()) throw new Error("Configure an LLM provider in Settings first.");
   const user = `Idea dump:\n"""\n${themeText}\n"""\n\nReturn the JSON described in the system prompt.`;
-  const raw = await callLLM({ system: context() + EXTRACTION_SYSTEM, user, expectJson: true });
-  return parseJsonLoose(raw);
+  return callLLMJson({ system: context() + EXTRACTION_SYSTEM, user, signal });
 }
 
-export async function parseSidePanelNote(noteText, existingEntities) {
+export async function parseSidePanelNote(noteText, existingEntities, { signal } = {}) {
   if (!isConfigured()) throw new Error("Configure an LLM provider in Settings first.");
   const summary = summarizeExistingEntities(existingEntities);
   const user = `Existing entities in this project:\n${summary}\n\nNew note from the writer:\n"""\n${noteText}\n"""\n\nReturn the JSON described in the system prompt.`;
-  const raw = await callLLM({ system: context() + NOTE_PARSE_SYSTEM, user, expectJson: true });
-  return parseJsonLoose(raw);
+  return callLLMJson({ system: context() + NOTE_PARSE_SYSTEM, user, signal });
 }
 
-export async function runGapAnalysis(themeText, extracted) {
+export async function runGapAnalysis(themeText, extracted, { signal } = {}) {
   if (!isConfigured()) throw new Error("Configure an LLM provider in Settings first.");
   const user = `Idea dump:\n"""\n${themeText}\n"""\n\nExtracted so far:\n${JSON.stringify(extracted, null, 2)}\n\nReturn the JSON described in the system prompt.`;
-  const raw = await callLLM({ system: context() + GAP_ANALYSIS_SYSTEM, user, expectJson: true });
-  return parseJsonLoose(raw);
+  const out = await callLLMJson({ system: context() + GAP_ANALYSIS_SYSTEM, user, signal });
+  // Normalize: drop malformed questions so the wizard can't choke on them.
+  const questions = (Array.isArray(out?.questions) ? out.questions : [])
+    .filter(q => q && typeof q === "object" && typeof q.question === "string" && q.question.trim())
+    .map((q, i) => ({
+      ...q,
+      id: q.id || `q${i + 1}`,
+      kind: q.kind === "chips" && Array.isArray(q.options) && q.options.length ? "chips" : "free-text",
+      options: Array.isArray(q.options) ? q.options.filter(o => typeof o === "string") : []
+    }));
+  return { ...out, questions };
 }
 
 function summarizeExistingEntities(entities) {
@@ -192,7 +202,7 @@ function summarizeExistingEntities(entities) {
 // Shows extracted + inferred items grouped. Extracted are pre-checked,
 // inferred require explicit checkbox. Resolves to the user-approved subset.
 
-export function openApprovalModal(parsed, { title = "Review extracted items", onApprove }) {
+export function openApprovalModal(parsed, { title = "Review extracted items", onApprove, onCancel }) {
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.innerHTML = `
@@ -217,13 +227,32 @@ export function openApprovalModal(parsed, { title = "Review extracted items", on
   document.body.appendChild(overlay);
 
   const body = overlay.querySelector("#approvalBody");
-  const state = collectApprovalItems(parsed);
-  renderApproval(body, state);
-
   const close = () => overlay.remove();
-  overlay.querySelector(".close-modal").addEventListener("click", close);
-  overlay.querySelector(".cancel").addEventListener("click", () => { close(); onApprove?.(emptyApproved()); });
-  overlay.addEventListener("click", e => { if (e.target === overlay) { close(); onApprove?.(emptyApproved()); } });
+  const cancel = () => { close(); onCancel?.(); };
+  overlay.querySelector(".close-modal").addEventListener("click", cancel);
+  overlay.querySelector(".cancel").addEventListener("click", cancel);
+  // Only a click that both starts and ends on the backdrop closes it, so
+  // drag-selecting text inside the modal can't throw the review away.
+  let mouseDownOnOverlay = false;
+  overlay.addEventListener("mousedown", e => { mouseDownOnOverlay = (e.target === overlay); });
+  overlay.addEventListener("click", e => {
+    if (e.target === overlay && mouseDownOnOverlay) cancel();
+    mouseDownOnOverlay = false;
+  });
+
+  let state;
+  try {
+    state = collectApprovalItems(parsed);
+    renderApproval(body, state);
+    if (wasTruncated(parsed)) {
+      body.insertAdjacentHTML("afterbegin", `<p class="approval-truncated">⚠ The model's reply was cut off before it finished — some items from the end of your text are probably missing. Add what's here, then re-process the rest as a shorter note.</p>`);
+    }
+  } catch (err) {
+    console.error("[approval] could not render LLM output", err, parsed);
+    body.innerHTML = `<p class="muted">The LLM returned something this dialog couldn't read (${esc(err?.message || err)}). Nothing was saved — close this and try again.</p>`;
+    overlay.querySelector(".save").disabled = true;
+    return;
+  }
 
   overlay.querySelector(".save").addEventListener("click", () => {
     const approved = readApproval(body, state);
@@ -232,44 +261,80 @@ export function openApprovalModal(parsed, { title = "Review extracted items", on
   });
 }
 
+// LLM output is untrusted in shape as well as content: coerce every list to
+// an array of objects and every list-of-strings field to strings.
+function objList(v) {
+  if (!Array.isArray(v)) return [];
+  return v.filter(x => x && typeof x === "object" && !Array.isArray(x));
+}
+// Only real scalars count — an object would otherwise show up (and save) as
+// "[object Object]".
+function strList(v) {
+  if (v === undefined || v === null || v === "") return [];
+  const arr = Array.isArray(v) ? v.flat(Infinity) : [v];
+  return arr
+    .filter(x => typeof x === "string" || typeof x === "number" || typeof x === "boolean")
+    .map(x => String(x).trim())
+    .filter(Boolean);
+}
+// A single text value, or "" if the model sent something that isn't text.
+function str(v) {
+  return typeof v === "string" ? v.trim() : (typeof v === "number" ? String(v) : "");
+}
+// Entities need a usable name; scrub every text field we display or save.
+function entityList(v, textFields = []) {
+  return objList(v)
+    .map(x => {
+      const out = { ...x, name: str(x.name) };
+      for (const f of textFields) out[f] = str(x[f]);
+      return out;
+    })
+    .filter(x => x.name);
+}
+
 function collectApprovalItems(parsed) {
   // Normalize either idea-dump shape (characters/locations/themes/concepts/scenes/beats/connections)
   // or note-parse shape (newCharacters/newLocations/newThemes/newConcepts/newScenes/newBeats/updates/connections).
-  const characters = parsed.characters || parsed.newCharacters || [];
-  const locations  = parsed.locations  || parsed.newLocations  || [];
-  const themes     = parsed.themes     || parsed.newThemes     || [];
-  const concepts   = parsed.concepts   || parsed.newConcepts   || [];
-  const scenes     = parsed.scenes     || parsed.newScenes     || [];
-  const beats      = parsed.beats      || parsed.newBeats      || [];
-  const updates    = parsed.updates    || [];
-  const connections = parsed.connections || [];
+  const characters = entityList(parsed.characters || parsed.newCharacters, ["role"])
+    .map(c => ({ ...c, traits: strList(c.traits), history: strList(c.history) }));
+  const locations  = entityList(parsed.locations  || parsed.newLocations, ["description"]);
+  const themes     = entityList(parsed.themes     || parsed.newThemes, ["description"]);
+  const concepts   = entityList(parsed.concepts   || parsed.newConcepts, ["description"]);
+  const scenes     = entityList(parsed.scenes     || parsed.newScenes, ["shortDescription", "longDescription", "columnHint"]);
+  const beats      = entityList(parsed.beats      || parsed.newBeats, ["description", "structurePosition", "columnHint"]);
+  const updates    = objList(parsed.updates)
+    .map(u => ({ ...u, entityName: str(u.entityName), field: str(u.field), addValue: strList(u.addValue) }))
+    .filter(u => u.entityName && u.field && u.addValue.length);
+  const connections = objList(parsed.connections)
+    .map(c => ({ ...c, from: str(c.from), to: str(c.to), label: str(c.label) }))
+    .filter(c => c.from && c.to);
   // Story Settings — flatten into a single section of pickable items.
   const storySettings = [];
-  const ss = parsed.storySettings || {};
-  if (ss.genre && ss.genre.value) {
+  const ss = (parsed.storySettings && typeof parsed.storySettings === "object") ? parsed.storySettings : {};
+  if (ss.genre && str(ss.genre.value)) {
     storySettings.push({
       _ssField: "genre",
       label: "Genre / setting",
-      value: ss.genre.value,
+      value: str(ss.genre.value),
       source: ss.genre.source || "inference",
       rationale: ss.genre.rationale || ""
     });
   }
-  if (ss.premise && ss.premise.value) {
+  if (ss.premise && str(ss.premise.value)) {
     storySettings.push({
       _ssField: "premise",
       label: "Premise",
-      value: ss.premise.value,
+      value: str(ss.premise.value),
       source: ss.premise.source || "inference",
       rationale: ss.premise.rationale || ""
     });
   }
-  for (const a of (ss.anchorConcepts || [])) {
-    if (!a.term) continue;
+  for (const a of objList(ss.anchorConcepts)) {
+    if (!str(a.term)) continue;
     storySettings.push({
       _ssField: "anchor",
-      term: a.term,
-      definition: a.definition || "",
+      term: str(a.term),
+      definition: str(a.definition),
       source: a.source || "extraction",
       rationale: a.rationale || ""
     });
@@ -367,7 +432,7 @@ function renderScene(s) {
 }
 function renderUpdate(u) {
   return `<div class="approval-name">Update <strong>${esc(u.entityName)}</strong> (${esc(u.entityType)})</div>
-          <div class="small muted">${esc(u.field)}: ${esc(u.addValue)}</div>`;
+          <div class="small muted">${esc(u.field)}: ${esc(strList(u.addValue).join("; "))}</div>`;
 }
 function renderConnection(c) {
   return `<div class="approval-name"><strong>${esc(c.from)}</strong> → <strong>${esc(c.to)}</strong></div>

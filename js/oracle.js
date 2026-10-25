@@ -1,7 +1,7 @@
 // Oracle tab — themed categories, collapsible cards, roll-from-collapsed.
 // Data lives in oracle-data.js (auto-generated).
 
-import { ORACLE } from "./oracle-data.js?v=20260603e";
+import { ORACLE } from "./oracle-data.js?v=20261024";
 
 const HISTORY_LIMIT = 30;
 let history = [];          // {tableName, result, ts}
@@ -99,6 +99,11 @@ const CATEGORIES = [
 // ----- Render entry point -----
 
 export function renderOracle(container) {
+  // The oracle is static data plus a module-level history, so it only needs
+  // building once. Re-running it on every tab switch stacked up another
+  // 30s timer and another search listener each time.
+  if (container.dataset.oracleMounted) return;
+  container.dataset.oracleMounted = "1";
   const categoriesEl = container.querySelector("#oracleCategories");
   const searchEl = container.querySelector("#oracleSearch");
   const historyEl = container.querySelector("#oracleHistory");

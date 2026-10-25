@@ -1,27 +1,27 @@
 import {
   auth, db, onAuthChange, renderUserArea, show, hide, blankFieldsForType, CARD_TYPES, KANBAN_STAGES, openBusyOverlay
-} from "./shared.js";
+} from "./shared.js?v=20261024";
 import {
   doc, getDoc, getDocs, collection, addDoc, updateDoc, deleteDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { isConfigured, getSettings } from "./llm.js";
-import { openSettingsModal } from "./settings.js?v=20260530";
+import { isConfigured, getSettings } from "./llm.js?v=20261024";
+import { openSettingsModal } from "./settings.js?v=20261024";
 import {
   extractFromIdeaDump, parseSidePanelNote, runGapAnalysis,
   openApprovalModal, openWizardModal
-} from "./extraction.js";
-import { logAudit, staleImpact, changesSinceLastRefresh } from "./audit.js";
-import { runGlobalRefresh, provideStateRef } from "./refresh.js";
+} from "./extraction.js?v=20261024";
+import { logAudit, staleImpact, changesSinceLastRefresh } from "./audit.js?v=20261024";
+import { runGlobalRefresh, provideStateRef } from "./refresh.js?v=20261024";
 import {
   renderReviewPanel, generateScene, insertGeneratedScene,
   suggestTraits, applyTraitSuggestions, openTraitSuggestModal,
   openSceneProposalModal,
   reviewCharacterArc, persistCharacterArcReview
-} from "./review.js";
-import { renderOracle } from "./oracle.js?v=20260603e";
-import { openStorySettingsModal, getColumnsForProject, defaultColumnId } from "./story-settings.js";
-import { provideExtractionStateRef } from "./extraction.js";
-import { mountLlmConfigBanner } from "./settings.js?v=20260530";
+} from "./review.js?v=20261024";
+import { renderOracle } from "./oracle.js?v=20261024";
+import { openStorySettingsModal, getColumnsForProject, defaultColumnId, resolveColumnHint, sortScenesByOutline } from "./story-settings.js?v=20261024";
+import { provideExtractionStateRef } from "./extraction.js?v=20261024";
+import { mountLlmConfigBanner } from "./settings.js?v=20261024";
 
 const REFRESH_NUDGE_THRESHOLD = 60;
 
@@ -91,7 +91,7 @@ const state = {
   connectFrom: null,
   // Canvas filter state — which card types are shown. Persisted in
   // sessionStorage so it survives view switches but resets in a new tab.
-  canvasFilterTypes: new Set(["character", "location", "theme", "arc", "beat"]),
+  canvasFilterTypes: new Set(["character", "location", "theme", "concept", "arc", "beat"]),
   canvasFilterText: "",
 };
 
@@ -124,11 +124,9 @@ els.clearNoteBtn?.addEventListener("click", () => { els.notePanel.value = ""; })
 // just reading from the bigger textarea.
 els.captureProcessBtn?.addEventListener("click", () => {
   if (!els.notePanel || !els.captureNotePanel) return;
+  // parseNoteHandler clears both textareas once the approved items save.
   els.notePanel.value = els.captureNotePanel.value;
-  parseNoteHandler().finally(() => {
-    // parseNoteHandler clears els.notePanel after approval; mirror back.
-    if (els.notePanel.value === "") els.captureNotePanel.value = "";
-  });
+  parseNoteHandler();
 });
 els.captureClearBtn?.addEventListener("click", () => { if (els.captureNotePanel) els.captureNotePanel.value = ""; });
 els.captureRerunExtractBtn?.addEventListener("click", () => runIdeaDumpExtractionNow());
@@ -153,7 +151,7 @@ els.mobileMoreList?.querySelectorAll("button[data-mobile-action]").forEach(btn =
     closeMobileMoreSheet();
     switch (action) {
       case "story-settings":
-        openStorySettingsModal(state, projectId, { onSaved: () => {} });
+        openStorySettingsModal(state, projectId, { onSaved: () => refreshActiveView() });
         break;
       case "refresh":
         handleRefresh();
@@ -195,7 +193,7 @@ els.rerunExtractBtn?.addEventListener("click", () => runIdeaDumpExtractionNow())
 els.recenterBtn?.addEventListener("click", () => {
   if (!state.cy) return;
   state.cy.resize();
-  state.cy.fit(undefined, 40);
+  fitGraph();
 });
 els.canvasRelayoutBtn?.addEventListener("click", () => {
   if (!state.cy) return;
@@ -216,6 +214,11 @@ document.querySelectorAll("[data-filter-type]").forEach(cb => {
 els.canvasFilterSearch?.addEventListener("input", () => {
   state.canvasFilterText = els.canvasFilterSearch.value.trim().toLowerCase();
   applyCanvasFilters();
+  // Searching should bring the matches into view, not just hide the rest.
+  if (state.cy && state.canvasFilterText) {
+    const shown = state.cy.nodes().filter(n => n.style("display") !== "none");
+    if (shown.length) fitGraph(shown);
+  }
 });
 els.canvasFiltersToggle?.addEventListener("click", () => {
   const body = els.canvasFiltersBody;
@@ -278,9 +281,7 @@ els.storySettingsBtn?.addEventListener("click", () => {
       console.log("[story-settings] saved");
       // Re-render whichever view is active so a structure change shows up
       // immediately (especially relevant after a remap).
-      if (els.outlineView && !els.outlineView.classList.contains("hidden")) {
-        renderOutline();
-      }
+      refreshActiveView();
     }
   });
 });
@@ -296,7 +297,10 @@ async function runLLMAction(label, fn) {
   console.log("[llm-action] start:", label);
   const busy = openBusyOverlay(label);
   try {
-    const result = await fn(busy);
+    // Race the work against the overlay's Cancel button so a cancelled call
+    // never surfaces its result later, even if the request itself can't be
+    // torn down mid-flight.
+    const result = await Promise.race([fn(busy), abortedPromise(busy.signal)]);
     console.log("[llm-action] ok:", label, result);
     busy.close();
     return { ok: true, result };
@@ -310,6 +314,20 @@ async function runLLMAction(label, fn) {
     alert(label + " failed:\n\n" + (err?.message || String(err)));
     return { ok: false, error: err };
   }
+}
+
+function abortedPromise(signal) {
+  return new Promise((_, reject) => {
+    const fire = () => reject(signal.reason || new DOMException("User cancelled", "AbortError"));
+    if (signal.aborted) fire();
+    else signal.addEventListener("abort", fire, { once: true });
+  });
+}
+
+// Total number of items a writer approved in the approval modal.
+function approvedCount(approved) {
+  if (!approved || typeof approved !== "object") return 0;
+  return Object.values(approved).reduce((n, v) => n + (Array.isArray(v) ? v.length : 0), 0);
 }
 
 console.log("[init] project.js wiring", {
@@ -447,7 +465,7 @@ async function runIdeaDumpExtractionNow(themeText) {
   }
   const { ok, result: parsed } = await runLLMAction(
     "Extracting entities from your idea dump",
-    () => extractFromIdeaDump(themeText)
+    (busy) => extractFromIdeaDump(themeText, { signal: busy.signal })
   );
   if (!ok) return;
   if (!parsed || typeof parsed !== "object") {
@@ -459,18 +477,18 @@ async function runIdeaDumpExtractionNow(themeText) {
   openApprovalModal(parsed, {
     title: "Review what the LLM found in your idea dump",
     onApprove: async (approved) => {
+      if (approvedCount(approved) === 0) return;
       try {
         await applyApprovedItemsSafe(approved, { kind: "idea-dump", sourceText: themeText });
       } catch (err) {
         console.error("[idea-dump] applyApprovedItems failed", err);
         renderRecoveryBanner();
-        alert("Saving approved items failed: " + (err.message || err) +
-          "\n\n✅ Your approved items were backed up locally. Reload the project to Retry or Download them from the recovery bar at the bottom — nothing was lost.");
+        alert("Saving approved items failed: " + (err.message || err) + backupNote(err));
         return;
       }
       const { ok: gapOk, result: gap } = await runLLMAction(
         "Looking for narrative gaps to fill",
-        () => runGapAnalysis(themeText, parsed)
+        (busy) => runGapAnalysis(themeText, approved, { signal: busy.signal })
       );
       if (!gapOk) return;
       const questions = gap?.questions || [];
@@ -505,7 +523,7 @@ async function parseNoteHandler() {
   }
   const { ok, result: parsed } = await runLLMAction(
     "Parsing note",
-    () => parseSidePanelNote(text, existingEntitySummaries())
+    (busy) => parseSidePanelNote(text, existingEntitySummaries(), { signal: busy.signal })
   );
   if (!ok) return;
   if (!parsed || typeof parsed !== "object") {
@@ -516,21 +534,25 @@ async function parseNoteHandler() {
   openApprovalModal(parsed, {
     title: "Review what the LLM found in your note",
     onApprove: async (approved) => {
+      // Approving nothing is the same as skipping: keep the note so the
+      // writer can edit and re-process it, and don't spend an LLM call on
+      // follow-up questions about items they rejected.
+      if (approvedCount(approved) === 0) return;
       try {
         await applyApprovedItemsSafe(approved, { kind: "note", sourceText: text });
         els.notePanel.value = "";
+        if (els.captureNotePanel) els.captureNotePanel.value = "";
       } catch (err) {
         console.error("[parse-note] applyApprovedItems failed", err);
         renderRecoveryBanner();
-        alert("Saving approved items failed: " + (err.message || err) +
-          "\n\n✅ Your approved items were backed up locally and your note text was kept. Use the recovery bar at the bottom to Retry or Download — nothing was lost.");
+        alert("Saving approved items failed: " + (err.message || err) + backupNote(err) + "\n\nYour note text was kept.");
         return;
       }
       // After approval, run gap analysis on the same note so the LLM can
       // ask clarifying questions and surface what the extraction missed.
       const { ok: gapOk, result: gap } = await runLLMAction(
         "Looking for follow-up questions",
-        () => runGapAnalysis(text, parsed)
+        (busy) => runGapAnalysis(text, approved, { signal: busy.signal })
       );
       if (!gapOk) return;
       const questions = gap?.questions || [];
@@ -591,8 +613,9 @@ function toStringList(value) {
   if (value === undefined || value === null) return [];
   const flat = Array.isArray(value) ? value.flat(Infinity) : [value];
   return flat
-    .filter(v => v !== undefined && v !== null && v !== "")
-    .map(v => (typeof v === "string" ? v : String(v)));
+    .filter(v => typeof v === "string" || typeof v === "number" || typeof v === "boolean")
+    .map(v => String(v).trim())
+    .filter(Boolean);
 }
 
 const BACKUP_KEY = "storybible_pending_saves";
@@ -602,9 +625,10 @@ function readBackups() {
   catch (e) { console.error("[backup] could not read backups", e); return []; }
 }
 
+// Returns false if the browser refused to store it (quota, private mode).
 function writeBackups(list) {
-  try { localStorage.setItem(BACKUP_KEY, JSON.stringify(list)); }
-  catch (e) { console.error("[backup] could not write backups (quota?)", e); }
+  try { localStorage.setItem(BACKUP_KEY, JSON.stringify(list)); return true; }
+  catch (e) { console.error("[backup] could not write backups (quota?)", e); return false; }
 }
 
 // Persist a snapshot of what we're about to save. Returns the backup id so the
@@ -622,7 +646,7 @@ function saveBackup(entry) {
   };
   list.push(rec);
   while (list.length > 50) list.shift(); // bound growth
-  writeBackups(list);
+  if (!writeBackups(list)) return null;
   console.log("[backup] saved", { id: rec.id, kind: rec.kind });
   return rec.id;
 }
@@ -639,12 +663,18 @@ async function applyApprovedItemsSafe(approved, { kind = "approved", sourceText 
   const backupId = saveBackup({ kind, sourceText, payload: approved });
   try {
     await applyApprovedItems(approved);
-    clearBackup(backupId);
+    if (backupId) clearBackup(backupId);
   } catch (err) {
-    console.error("[backup] save failed; backup retained", { backupId, err });
-    if (err && typeof err === "object") err.__backupRetained = true;
+    console.error("[backup] save failed", { backupId, err });
+    if (err && typeof err === "object") err.__backupRetained = !!backupId;
     throw err;
   }
+}
+
+function backupNote(err) {
+  return err?.__backupRetained
+    ? "\n\n✅ Your approved items were backed up locally. Use the recovery bar at the bottom to Retry or Download — nothing was lost."
+    : "\n\n⚠ This browser couldn't store a backup (storage full or blocked), so items that didn't save are not recoverable. Items listed as saved above are safe.";
 }
 
 // ---- Recovery UI ---------------------------------------------------------
@@ -696,7 +726,7 @@ function renderRecoveryBanner() {
   for (const rec of pending) {
     const row = document.createElement("div");
     row.style.cssText = "display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-top:1px solid rgba(255,255,255,.12);";
-    const when = (() => { try { return new Date(rec.createdAt).toLocaleString(); } catch { return rec.createdAt; } })();
+    const when = (() => { const d = new Date(rec.createdAt); return isNaN(d) ? "unknown time" : d.toLocaleString(); })();
     const label = document.createElement("span");
     label.style.cssText = "flex:1;min-width:180px;";
     label.textContent = `${when} — ${backupItemCount(rec.payload)} item(s)`;
@@ -714,7 +744,8 @@ function renderRecoveryBanner() {
       const btn = e.currentTarget;
       btn.disabled = true; btn.textContent = "Saving…";
       try {
-        await applyApprovedItems(rec.payload);
+        // A backup with no payload has nothing to retry — just clear it.
+        if (rec.payload && typeof rec.payload === "object") await applyApprovedItems(rec.payload);
         clearBackup(rec.id);
         renderRecoveryBanner();
       } catch (err) {
@@ -736,6 +767,16 @@ function renderRecoveryBanner() {
   document.body.appendChild(banner);
 }
 
+// Fields an LLM "update" may touch. Anything else (title, archived, ids…) is
+// ignored so a confused model can't rename or hide cards behind the writer's back.
+const UPDATE_LIST_FIELDS = new Set(["traits", "history"]);
+const UPDATE_APPEND_FIELDS = new Set(["role", "description", "shortDescription", "longDescription", "physicalDescription", "summary"]);
+const UPDATE_REPLACE_FIELDS = new Set(["structurePosition", "age"]);
+
+// Saving is idempotent: anything that already exists (same type + title, same
+// connection, a trait already on the card, text already in a field) is
+// skipped. That makes "Retry save" on a partially-saved batch safe instead of
+// duplicating whatever made it in the first time.
 async function applyApprovedItems(approved) {
   console.log("[apply] approved input", {
     characters: approved?.characters?.length || 0,
@@ -744,10 +785,22 @@ async function applyApprovedItems(approved) {
     updates:    approved?.updates?.length    || 0,
     connections:approved?.connections?.length|| 0
   });
-  const nameToCardId = new Map();
+  const lower = (s) => String(s || "").trim().toLowerCase();
+  const byTypeName = new Map(); // "type:name" -> id
+  const byName = new Map();     // "name" -> id (first card with that name)
+  const remember = (type, title, id) => {
+    const k = lower(title);
+    byTypeName.set(`${type}:${k}`, id);
+    if (!byName.has(k)) byName.set(k, id);
+  };
   for (const c of state.cards.values()) {
-    if (!c.archived) nameToCardId.set(c.title.toLowerCase(), c.id);
+    if (!c.archived) remember(c.type, c.title, c.id);
   }
+  const findCard = (name, type) => {
+    const k = lower(name);
+    if (!k) return null;
+    return (type && byTypeName.get(`${type}:${k}`)) || byName.get(k) || null;
+  };
 
   const cardsCol = collection(db, "users", state.user.uid, "projects", projectId, "cards");
   const connCol  = collection(db, "users", state.user.uid, "projects", projectId, "connections");
@@ -758,187 +811,131 @@ async function applyApprovedItems(approved) {
   // the items that worked (and the writer is told exactly what didn't).
   const failures = [];
 
-  for (const ch of approved.characters || []) {
-    if (!ch.name) { console.warn("[apply] skipped character with no name", ch); continue; }
-    if (nameToCardId.has(ch.name.toLowerCase())) { console.log("[apply] character already exists, skipping create", ch.name); continue; }
+  const addCard = async (type, name, fields, auditExtra = {}) => {
+    const title = String(name || "").trim();
+    if (!title) { console.warn(`[apply] skipped ${type} with no name`); return; }
+    if (byTypeName.has(`${type}:${lower(title)}`)) {
+      console.log(`[apply] ${type} already exists, skipping create`, title);
+      return;
+    }
     const data = {
-      type: "character",
-      title: ch.name,
-      archived: false,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      order: 0,
-      fields: {
-        ...blankFieldsForType("character"),
-        role: ch.role || "",
-        traits: toStringList(ch.traits),
-        history: toStringList(ch.history)
-      }
+      type, title, archived: false,
+      createdAt: serverTimestamp(), updatedAt: serverTimestamp(), order: 0,
+      fields: { ...blankFieldsForType(type), ...fields }
     };
-    const ref = await addDoc(cardsCol, data);
-    state.cards.set(ref.id, { id: ref.id, ...data });
-    nameToCardId.set(ch.name.toLowerCase(), ref.id);
-    auditBatch.push({ entityType: "card", entityId: ref.id, field: "created", oldValue: null, newValue: { type: "character", title: ch.name, source: ch.source } });
-    added++;
-    console.log("[apply] added character", { id: ref.id, name: ch.name });
+    try {
+      const ref = await addDoc(cardsCol, data);
+      state.cards.set(ref.id, { id: ref.id, ...data });
+      remember(type, title, ref.id);
+      auditBatch.push({ entityType: "card", entityId: ref.id, field: "created", oldValue: null, newValue: { type, title, ...auditExtra } });
+      added++;
+      console.log(`[apply] added ${type}`, { id: ref.id, title });
+    } catch (err) {
+      console.error(`[apply] create ${type} failed; continuing with rest of batch`, { title, err });
+      failures.push(`create ${type} "${title}": ${err?.message || err}`);
+    }
+  };
+  const str = (v) => (Array.isArray(v) ? toStringList(v).join("\n") : toStringList(v)[0] || "");
+
+  for (const ch of approved.characters || []) {
+    await addCard("character", ch?.name, {
+      role: str(ch?.role),
+      traits: toStringList(ch?.traits),
+      history: toStringList(ch?.history)
+    }, { source: ch?.source });
   }
   for (const l of approved.locations || []) {
-    if (!l.name) { console.warn("[apply] skipped location with no name", l); continue; }
-    if (nameToCardId.has(l.name.toLowerCase())) { console.log("[apply] location already exists, skipping create", l.name); continue; }
-    const data = {
-      type: "location", title: l.name, archived: false,
-      createdAt: serverTimestamp(), updatedAt: serverTimestamp(), order: 0,
-      fields: { ...blankFieldsForType("location"), description: l.description || "" }
-    };
-    const ref = await addDoc(cardsCol, data);
-    state.cards.set(ref.id, { id: ref.id, ...data });
-    nameToCardId.set(l.name.toLowerCase(), ref.id);
-    auditBatch.push({ entityType: "card", entityId: ref.id, field: "created", oldValue: null, newValue: { type: "location", title: l.name, source: l.source } });
-    added++;
-    console.log("[apply] added location", { id: ref.id, name: l.name });
+    await addCard("location", l?.name, { description: str(l?.description) }, { source: l?.source });
   }
   for (const t of approved.themes || []) {
-    if (!t.name) { console.warn("[apply] skipped theme with no name", t); continue; }
-    if (nameToCardId.has(t.name.toLowerCase())) { console.log("[apply] theme already exists, skipping create", t.name); continue; }
-    const data = {
-      type: "theme", title: t.name, archived: false,
-      createdAt: serverTimestamp(), updatedAt: serverTimestamp(), order: 0,
-      fields: { ...blankFieldsForType("theme"), description: t.description || "" }
-    };
-    const ref = await addDoc(cardsCol, data);
-    state.cards.set(ref.id, { id: ref.id, ...data });
-    nameToCardId.set(t.name.toLowerCase(), ref.id);
-    auditBatch.push({ entityType: "card", entityId: ref.id, field: "created", oldValue: null, newValue: { type: "theme", title: t.name, source: t.source } });
-    added++;
-    console.log("[apply] added theme", { id: ref.id, name: t.name });
+    await addCard("theme", t?.name, { description: str(t?.description) }, { source: t?.source });
   }
   for (const c of approved.concepts || []) {
-    if (!c.name) { console.warn("[apply] skipped concept with no name", c); continue; }
-    if (nameToCardId.has(c.name.toLowerCase())) { console.log("[apply] concept already exists, skipping create", c.name); continue; }
-    const data = {
-      type: "concept", title: c.name, archived: false,
-      createdAt: serverTimestamp(), updatedAt: serverTimestamp(), order: 0,
-      fields: { ...blankFieldsForType("concept"), description: c.description || "" }
-    };
-    const ref = await addDoc(cardsCol, data);
-    state.cards.set(ref.id, { id: ref.id, ...data });
-    nameToCardId.set(c.name.toLowerCase(), ref.id);
-    auditBatch.push({ entityType: "card", entityId: ref.id, field: "created", oldValue: null, newValue: { type: "concept", title: c.name, source: c.source } });
-    added++;
-    console.log("[apply] added concept", { id: ref.id, name: c.name });
+    await addCard("concept", c?.name, { description: str(c?.description) }, { source: c?.source });
   }
+
   // Resolve column hints for scenes and beats. The LLM might return a
   // column ID, a label, or nonsense — fall back to the default main column
   // when no valid match. columnOrder is max+1 within the chosen column so
   // newly-added cards land at the bottom of the stack.
   const projectColumns = getColumnsForProject(state.project);
-  const validColumnIds = new Set(projectColumns.map(c => c.id));
   const fallbackColumnId = defaultColumnId(state.project);
-  const resolveColumn = (hint) => {
-    if (!hint) return fallbackColumnId;
-    const h = String(hint).trim().toLowerCase();
-    if (validColumnIds.has(h)) return h;
-    // Allow label match: "Act 1: Exposition" → act-1
-    const byLabel = projectColumns.find(c => c.label.toLowerCase() === h);
-    if (byLabel) return byLabel.id;
-    // Allow short label match: "act 1" → act-1
-    const byShort = projectColumns.find(c => c.label.toLowerCase().startsWith(h));
-    if (byShort) return byShort.id;
-    console.warn("[apply] columnHint did not match any column; falling back to default", { hint, fallbackColumnId });
-    return fallbackColumnId;
-  };
+  const resolveColumn = (hint) => resolveColumnHint(hint, projectColumns, fallbackColumnId);
   const columnOrderCounters = {}; // colId -> next columnOrder to use
-  const initCounter = (colId) => {
-    if (columnOrderCounters[colId] != null) return;
-    const max = [...state.cards.values()]
-      .filter(c => !c.archived && (c.type === "scene" || c.type === "beat") && c.fields?.columnId === colId)
-      .reduce((m, c) => Math.max(m, c.fields?.columnOrder ?? -1), -1);
-    columnOrderCounters[colId] = max + 1;
+  const nextColumnOrder = (colId) => {
+    if (columnOrderCounters[colId] == null) {
+      const max = [...state.cards.values()]
+        .filter(c => !c.archived && (c.type === "scene" || c.type === "beat") && c.fields?.columnId === colId)
+        .reduce((m, c) => Math.max(m, c.fields?.columnOrder ?? -1), -1);
+      columnOrderCounters[colId] = max + 1;
+    }
+    return columnOrderCounters[colId]++;
   };
 
   for (const b of approved.beats || []) {
-    if (!b.name) { console.warn("[apply] skipped beat with no name", b); continue; }
-    const colId = resolveColumn(b.columnHint);
-    initCounter(colId);
-    const data = {
-      type: "beat", title: b.name, archived: false,
-      createdAt: serverTimestamp(), updatedAt: serverTimestamp(), order: 0,
-      fields: {
-        ...blankFieldsForType("beat"),
-        description: b.description || "",
-        structurePosition: b.structurePosition || "",
-        columnId: colId,
-        columnOrder: columnOrderCounters[colId]++
-      }
-    };
-    const ref = await addDoc(cardsCol, data);
-    state.cards.set(ref.id, { id: ref.id, ...data });
-    nameToCardId.set(b.name.toLowerCase(), ref.id);
-    auditBatch.push({ entityType: "card", entityId: ref.id, field: "created", oldValue: null, newValue: { type: "beat", title: b.name, columnId: colId, source: b.source } });
-    added++;
-    console.log("[apply] added beat", { id: ref.id, name: b.name, columnId: colId });
+    const colId = resolveColumn(b?.columnHint);
+    if (byTypeName.has(`beat:${lower(b?.name)}`)) continue;
+    await addCard("beat", b?.name, {
+      description: str(b?.description),
+      structurePosition: str(b?.structurePosition),
+      columnId: colId,
+      columnOrder: nextColumnOrder(colId)
+    }, { columnId: colId, source: b?.source });
   }
 
   for (const s of approved.scenes || []) {
-    if (!s.name) { console.warn("[apply] skipped scene with no name", s); continue; }
-    const colId = resolveColumn(s.columnHint);
-    initCounter(colId);
-    const data = {
-      type: "scene", title: s.name, archived: false,
-      createdAt: serverTimestamp(), updatedAt: serverTimestamp(), order: 0,
-      fields: {
-        ...blankFieldsForType("scene"),
-        shortDescription: s.shortDescription || "",
-        longDescription:  s.longDescription  || "",
-        ragSummary:       s.shortDescription || null,
-        ragSummaryStale:  !!s.longDescription,
-        columnId: colId,
-        columnOrder: columnOrderCounters[colId]++
-      }
-    };
-    const ref = await addDoc(cardsCol, data);
-    state.cards.set(ref.id, { id: ref.id, ...data });
-    nameToCardId.set(s.name.toLowerCase(), ref.id);
-    auditBatch.push({ entityType: "card", entityId: ref.id, field: "created", oldValue: null, newValue: { type: "scene", title: s.name, columnId: colId, source: s.source } });
-    added++;
-    console.log("[apply] added scene", { id: ref.id, name: s.name, columnId: colId });
+    const colId = resolveColumn(s?.columnHint);
+    if (byTypeName.has(`scene:${lower(s?.name)}`)) continue;
+    const shortDescription = str(s?.shortDescription);
+    const longDescription = str(s?.longDescription);
+    await addCard("scene", s?.name, {
+      shortDescription,
+      longDescription,
+      ragSummary: shortDescription || null,
+      ragSummaryStale: !!longDescription,
+      columnId: colId,
+      columnOrder: nextColumnOrder(colId)
+    }, { columnId: colId, source: s?.source });
   }
 
   for (const u of approved.updates || []) {
-    const targetId = nameToCardId.get((u.entityName || "").toLowerCase());
-    if (!targetId) continue;
-    const card = state.cards.get(targetId);
+    const f = u?.field;
+    const addList = toStringList(u?.addValue).map(v => v.trim()).filter(Boolean);
+    if (!f || !addList.length) continue;
+    if (!UPDATE_LIST_FIELDS.has(f) && !UPDATE_APPEND_FIELDS.has(f) && !UPDATE_REPLACE_FIELDS.has(f)) {
+      console.warn("[apply] ignoring update to unsupported field", { entity: u.entityName, field: f });
+      continue;
+    }
+    const targetId = findCard(u.entityName, u.entityType);
+    const card = targetId ? state.cards.get(targetId) : null;
     if (!card) continue;
     card.fields = card.fields || {};
-    const f = u.field;
-    if (f === "traits" || f === "history") {
-      // Start from a flat string list and append the new value(s). toStringList
-      // flattens the case where the LLM hands us an array for addValue, which
-      // would otherwise produce a Firestore-rejected nested array.
-      const arr = toStringList(card.fields[f]);
-      arr.push(...toStringList(u.addValue));
-      card.fields[f] = arr;
-    } else if (f === "role" || f === "description") {
-      const add = Array.isArray(u.addValue) ? toStringList(u.addValue).join("\n") : u.addValue;
-      card.fields[f] = card.fields[f] ? (card.fields[f] + "\n" + add) : add;
+    const before = card.fields[f];
+    let next;
+    if (UPDATE_LIST_FIELDS.has(f)) {
+      // Flat string list (Firestore rejects nested arrays); skip values the
+      // card already has so a retry doesn't double them up.
+      const arr = toStringList(before);
+      const seen = new Set(arr.map(lower));
+      for (const v of addList) if (!seen.has(lower(v))) { arr.push(v); seen.add(lower(v)); }
+      next = arr;
+    } else if (UPDATE_APPEND_FIELDS.has(f)) {
+      // "addValue" adds to the field — never overwrite what the writer had.
+      const existing = str(before);
+      const add = addList.join("\n");
+      next = !existing ? add : (existing.includes(add) ? existing : existing + "\n" + add);
     } else {
-      // Never let a nested array reach Firestore for unknown fields either.
-      card.fields[f] = Array.isArray(u.addValue) ? toStringList(u.addValue) : u.addValue;
+      next = addList.join(" ");
     }
-    // Stale impact for updates from LLM parsing
+    if (JSON.stringify(next) === JSON.stringify(before ?? (UPDATE_LIST_FIELDS.has(f) ? [] : ""))) continue;
+    const patch = { [`fields.${f}`]: next, updatedAt: serverTimestamp() };
     const impact = staleImpact("card-" + card.type, f);
-    const extra = {};
-    if (impact?.self) {
-      card.fields[impact.self.field] = impact.self.value;
-      extra[`fields.${impact.self.field}`] = impact.self.value;
-    }
+    if (impact?.self) patch[`fields.${impact.self.field}`] = impact.self.value;
     try {
-      await updateDoc(doc(db, "users", state.user.uid, "projects", projectId, "cards", targetId), {
-        [`fields.${f}`]: card.fields[f],
-        ...extra,
-        updatedAt: serverTimestamp()
-      });
-      auditBatch.push({ entityType: "card", entityId: targetId, field: f, oldValue: null, newValue: u.addValue });
+      await updateDoc(doc(db, "users", state.user.uid, "projects", projectId, "cards", targetId), patch);
+      card.fields[f] = next;
+      if (impact?.self) card.fields[impact.self.field] = impact.self.value;
+      auditBatch.push({ entityType: "card", entityId: targetId, field: f, oldValue: before, newValue: addList });
     } catch (err) {
       console.error("[apply] update failed; continuing with rest of batch", { entity: u.entityName, field: f, err });
       failures.push(`update "${u.entityName}" → ${f}: ${err?.message || err}`);
@@ -946,59 +943,75 @@ async function applyApprovedItems(approved) {
   }
 
   for (const c of approved.connections || []) {
-    const fromId = nameToCardId.get((c.from || "").toLowerCase());
-    const toId   = nameToCardId.get((c.to   || "").toLowerCase());
-    if (!fromId || !toId) continue;
-    const data = {
-      fromCardId: fromId, toCardId: toId,
-      label: c.label || "", createdAt: serverTimestamp()
-    };
-    const ref = await addDoc(connCol, data);
-    state.connections.set(ref.id, { id: ref.id, ...data });
-    auditBatch.push({ entityType: "connection", entityId: ref.id, field: "created", oldValue: null, newValue: { fromCardId: fromId, toCardId: toId, label: data.label } });
+    const fromId = findCard(c?.from);
+    const toId   = findCard(c?.to);
+    if (!fromId || !toId || fromId === toId) continue;
+    const label = str(c?.label).trim();
+    const dup = [...state.connections.values()].some(x =>
+      x.fromCardId === fromId && x.toCardId === toId && lower(x.label) === lower(label));
+    if (dup) continue;
+    const data = { fromCardId: fromId, toCardId: toId, label, createdAt: serverTimestamp() };
+    try {
+      const ref = await addDoc(connCol, data);
+      state.connections.set(ref.id, { id: ref.id, ...data });
+      auditBatch.push({ entityType: "connection", entityId: ref.id, field: "created", oldValue: null, newValue: { fromCardId: fromId, toCardId: toId, label } });
+    } catch (err) {
+      console.error("[apply] connection failed; continuing with rest of batch", { c, err });
+      failures.push(`connection "${c?.from}" → "${c?.to}": ${err?.message || err}`);
+    }
   }
 
   // Story Settings — merge into project.storySettings if anything approved.
   const ssApproved = approved.storySettings || [];
   if (ssApproved.length) {
     const current = { ...(state.project.storySettings || {}) };
-    if (!Array.isArray(current.anchorConcepts)) current.anchorConcepts = [];
+    current.anchorConcepts = Array.isArray(current.anchorConcepts) ? current.anchorConcepts.map(a => ({ ...a })) : [];
     let ssChanged = false;
     for (const item of ssApproved) {
       if (item._ssField === "genre" && item.value) {
-        if (current.genre !== item.value) { current.genre = item.value; ssChanged = true; }
+        if (current.genre !== item.value) { current.genre = str(item.value); ssChanged = true; }
       } else if (item._ssField === "premise" && item.value) {
-        if (current.premise !== item.value) { current.premise = item.value; ssChanged = true; }
+        if (current.premise !== item.value) { current.premise = str(item.value); ssChanged = true; }
       } else if (item._ssField === "anchor" && item.term) {
-        const existing = current.anchorConcepts.find(a => a.term.toLowerCase() === item.term.toLowerCase());
+        const existing = current.anchorConcepts.find(a => lower(a.term) === lower(item.term));
         if (existing) {
           if (existing.definition !== item.definition && item.definition) {
-            existing.definition = item.definition;
+            existing.definition = str(item.definition);
             ssChanged = true;
           }
         } else {
-          current.anchorConcepts.push({ term: item.term, definition: item.definition || "" });
+          current.anchorConcepts.push({ term: str(item.term), definition: str(item.definition) });
           ssChanged = true;
         }
       }
     }
     if (ssChanged) {
-      state.project.storySettings = current;
-      await updateDoc(doc(db, "users", state.user.uid, "projects", projectId), {
-        storySettings: current,
-        updatedAt: serverTimestamp()
-      });
-      auditBatch.push({ entityType: "project", entityId: projectId, field: "storySettings", oldValue: null, newValue: current });
-      console.log("[apply] storySettings merged", current);
+      try {
+        await updateDoc(doc(db, "users", state.user.uid, "projects", projectId), {
+          storySettings: current,
+          updatedAt: serverTimestamp()
+        });
+        state.project.storySettings = current;
+        auditBatch.push({ entityType: "project", entityId: projectId, field: "storySettings", oldValue: null, newValue: { genre: current.genre, premise: current.premise } });
+        console.log("[apply] storySettings merged", current);
+      } catch (err) {
+        console.error("[apply] storySettings save failed", err);
+        failures.push(`story settings: ${err?.message || err}`);
+      }
     }
   }
 
-  if (auditBatch.length) {
-    await logAudit(state.user.uid, projectId, auditBatch, state.project);
+  // Everything above is already committed, so a failure to log history must
+  // not make the save look failed (that used to trigger duplicate retries).
+  try {
+    if (auditBatch.length) await logAudit(state.user.uid, projectId, auditBatch, state.project);
+    await touchProject();
+  } catch (err) {
+    console.warn("[apply] items saved, but the audit/touch write failed", err);
   }
-  await touchProject();
   console.log("[apply] complete", { added, totalCardsNow: state.cards.size, failures: failures.length });
   rebuildGraphElements();
+  if (els.outlineView && !els.outlineView.classList.contains("hidden")) renderOutline();
   updateRefreshNudge();
   // If some items failed, throw so the caller keeps the backup for recovery —
   // but only AFTER committing everything that did succeed above.
@@ -1028,21 +1041,24 @@ async function applyWizardAnswers(answers) {
       noteLines.push(`A: ${a.answer}`);
     }
     const noteText = noteLines.join("\n");
-    const { ok, result: parsed } = await runLLMAction(
+    const { ok, result: parsed, cancelled } = await runLLMAction(
       "Processing wizard answers",
-      () => parseSidePanelNote(noteText, existingEntitySummaries())
+      (busy) => parseSidePanelNote(noteText, existingEntitySummaries(), { signal: busy.signal })
     );
+    // Cancelled or failed: fall through to the raw-append path below so the
+    // writer's answers still land on their cards.
+    if (cancelled) console.log("[wizard-answers] processing cancelled; appending answers as written");
     if (ok && parsed && typeof parsed === "object") {
       openApprovalModal(parsed, {
         title: "Review what the LLM extracted from your wizard answers",
         onApprove: async (approved) => {
+          if (approvedCount(approved) === 0) return;
           try {
             await applyApprovedItemsSafe(approved, { kind: "wizard", sourceText: noteText });
           } catch (err) {
             console.error("[wizard-answers] applyApprovedItems failed", err);
             renderRecoveryBanner();
-            alert("Saving approved items failed: " + (err.message || err) +
-              "\n\n✅ Your approved items were backed up locally. Use the recovery bar at the bottom to Retry or Download — nothing was lost.");
+            alert("Saving approved items failed: " + (err.message || err) + backupNote(err));
           }
         }
       });
@@ -1087,12 +1103,16 @@ async function applyWizardAnswers(answers) {
     card.fields = card.fields || {};
     const f = a.targetField;
     if (!f) continue;
-    if (f === "traits" || f === "history") {
-      const arr = Array.isArray(card.fields[f]) ? card.fields[f].slice() : [];
-      arr.push(a.answer);
+    const answer = String(a.answer);
+    if (UPDATE_LIST_FIELDS.has(f)) {
+      const arr = toStringList(card.fields[f]);
+      arr.push(answer);
       card.fields[f] = arr;
+    } else if (UPDATE_APPEND_FIELDS.has(f) || UPDATE_REPLACE_FIELDS.has(f)) {
+      const existing = typeof card.fields[f] === "string" ? card.fields[f] : "";
+      card.fields[f] = existing ? (existing + "\n" + answer) : answer;
     } else {
-      card.fields[f] = card.fields[f] ? (card.fields[f] + "\n" + a.answer) : a.answer;
+      continue; // unknown/unsafe target field
     }
     const impact = staleImpact("card-" + card.type, f);
     const extra = {};
@@ -1115,7 +1135,21 @@ async function applyWizardAnswers(answers) {
   updateRefreshNudge();
 }
 
+// Re-render the visible view after a card changes outside of it (the card
+// editor floats over every view, so an edit from Wiki/Kanban/Outline must
+// repaint that view, not just the Canvas).
+function refreshActiveView() {
+  rebuildGraphElements();
+  const visible = (el) => el && !el.classList.contains("hidden");
+  if (visible(els.outlineView)) renderOutline();
+  else if (visible(els.kanbanView)) renderKanban();
+  else if (visible(els.wikiView)) renderWiki();
+  else if (visible(els.archiveView)) renderArchive();
+}
+
 function switchView(name) {
+  // A half-finished "Connect to…" must not survive leaving the Canvas.
+  if (state.connectMode) cancelConnectMode();
   els.tabs.forEach(t => t.classList.toggle("active", t.dataset.view === name));
   hide(els.graphView);
   hide(els.outlineView);
@@ -1341,7 +1375,7 @@ function renderWikiCharacter(card, f) {
       <section class="wiki-section">
         <h3>Description</h3>
         ${f.age ? `<p class="muted small">Age: ${esc(f.age)}</p>` : ""}
-        ${f.physicalDescription ? `<p>${esc(f.physicalDescription)}</p>` : ""}
+        ${f.physicalDescription ? proseToHtml(f.physicalDescription) : ""}
       </section>
     `);
   }
@@ -1529,7 +1563,7 @@ async function runWikiArcReview(characterId) {
   if (!card || card.type !== "character") return;
   const { ok, result: r } = await runLLMAction(
     `Reviewing arc for "${card.title}"`,
-    () => reviewCharacterArc(state, characterId)
+    (busy) => reviewCharacterArc(state, characterId, { signal: busy.signal })
   );
   if (!ok || !r) return;
   try {
@@ -1577,9 +1611,10 @@ function proseToHtml(text) {
 
 function renderKanban() {
   els.kanbanBoard.innerHTML = "";
-  const scenes = [...state.cards.values()]
-    .filter(c => c.type === "scene" && !c.archived)
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const scenes = sortScenesByOutline(
+    [...state.cards.values()].filter(c => c.type === "scene" && !c.archived),
+    state.project
+  );
   for (const stage of KANBAN_STAGES) {
     const col = document.createElement("div");
     col.className = "kanban-col";
@@ -1629,10 +1664,8 @@ function makeKanbanCard(scene) {
     div.classList.add("dragging");
   });
   div.addEventListener("dragend", () => div.classList.remove("dragging"));
-  div.addEventListener("click", () => {
-    switchView("graph");
-    openCardEditor(scene.id);
-  });
+  // The card editor floats over any view, so stay on the board.
+  div.addEventListener("click", () => openCardEditor(scene.id));
   return div;
 }
 
@@ -1831,7 +1864,8 @@ function rebuildGraphElements() {
       const layout = chooseLayout(nodes.length, edges.length);
       console.log("[graph] first-render layout:", layout.name);
       state.cy.layout(layout).run();
-      state.cy.fit(undefined, 40);
+      resolveOverlaps();
+      fitGraph();
       // Persist the freshly-laid-out positions so the user's next reload
       // sees the same arrangement (rather than re-running the layout, which
       // could shuffle things).
@@ -1874,7 +1908,8 @@ function forceFullLayout() {
   const layout = chooseLayout(allNodes.length, allEdges.length);
   console.log("[graph] forced relayout:", layout.name);
   state.cy.layout(layout).run();
-  state.cy.fit(undefined, 40);
+  resolveOverlaps();
+  fitGraph();
   // Persist new positions
   setTimeout(() => {
     state.cy.nodes().forEach(n => schedulePositionSave(n.id(), { x: n.position().x, y: n.position().y }));
@@ -1926,6 +1961,69 @@ function placeNewNodesNearViewport(newIds) {
       y: cy + Math.sin(angle) * radius
     });
   });
+  // Nudge only the new nodes off anything they landed on.
+  resolveOverlaps(new Set(newIds));
+  // If any new card ended up outside the viewport, zoom out to show everything.
+  const view = state.cy.extent();
+  const offscreen = newIds.some(id => {
+    const bb = state.cy.getElementById(id).boundingBox();
+    return bb.x1 < view.x1 || bb.x2 > view.x2 || bb.y1 < view.y1 || bb.y2 > view.y2;
+  });
+  if (offscreen) fitGraph();
+}
+
+// Fit the graph (or a subset) to the canvas without zooming in absurdly —
+// fitting a single 140px card would otherwise blow it up to fill the screen.
+const MAX_FIT_ZOOM = 1.25;
+function fitGraph(eles) {
+  if (!state.cy) return;
+  const target = eles && eles.length ? eles : state.cy.nodes();
+  if (!target.length) return;
+  state.cy.fit(target, 40);
+  if (state.cy.zoom() > MAX_FIT_ZOOM) {
+    state.cy.zoom(MAX_FIT_ZOOM);
+    state.cy.center(target);
+  }
+}
+
+// Push overlapping nodes apart. Cytoscape's layouts (cose especially) pack
+// disconnected cards on top of one another, and new cards dropped near the
+// viewport centre can land on existing ones. Only nodes in `movableIds`
+// move (all of them when omitted), so a hand-arranged graph stays put.
+function resolveOverlaps(movableIds = null, pad = 24) {
+  if (!state.cy) return;
+  const nodes = state.cy.nodes().toArray();
+  const canMove = (n) => !movableIds || movableIds.has(n.id());
+  for (let iter = 0; iter < 80; iter++) {
+    let moved = false;
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const a = nodes[i], b = nodes[j];
+        const ma = canMove(a), mb = canMove(b);
+        if (!ma && !mb) continue;
+        const A = a.boundingBox(), B = b.boundingBox();
+        const ox = Math.min(A.x2, B.x2) - Math.max(A.x1, B.x1) + pad;
+        const oy = Math.min(A.y2, B.y2) - Math.max(A.y1, B.y1) + pad;
+        if (ox <= 0 || oy <= 0) continue;
+        const pa = a.position(), pb = b.position();
+        // Separate along the axis that needs the smaller push.
+        const alongX = ox < oy;
+        const dir = alongX ? (pb.x >= pa.x ? 1 : -1) : (pb.y >= pa.y ? 1 : -1);
+        const dist = (alongX ? ox : oy) + 1;
+        const shareA = ma && mb ? dist / 2 : (ma ? dist : 0);
+        const shareB = dist - shareA;
+        if (alongX) {
+          if (shareA) a.position({ x: pa.x - dir * shareA, y: pa.y });
+          if (shareB) b.position({ x: pb.x + dir * shareB, y: pb.y });
+        } else {
+          if (shareA) a.position({ x: pa.x, y: pa.y - dir * shareA });
+          if (shareB) b.position({ x: pb.x, y: pb.y + dir * shareB });
+        }
+        moved = true;
+      }
+    }
+    if (!moved) return;
+  }
 }
 
 // Cose looks great when there are real edges to pull nodes together, but
@@ -1959,7 +2057,9 @@ function chooseLayout(nodeCount, edgeCount) {
     gravity: 0.15,
     numIter: 2000,
     nodeOverlap: 20,
-    randomize: false
+    // Both callers want a fresh arrangement. Starting cose from the current
+    // positions (all stacked at 0,0 on first render) left nodes overlapping.
+    randomize: true
   };
 }
 
@@ -1981,6 +2081,15 @@ async function createCard(type) {
     order: type === "scene" ? nextSceneOrder() : 0,
     fields: blankFieldsForType(type)
   };
+  if (type === "scene" || type === "beat") {
+    // The Outline is built from columnId — without one the card lands in
+    // "Unassigned". Put it at the end of the first act.
+    const colId = defaultColumnId(state.project);
+    data.fields.columnId = colId;
+    data.fields.columnOrder = [...state.cards.values()]
+      .filter(c => !c.archived && (c.type === "scene" || c.type === "beat") && c.fields?.columnId === colId)
+      .reduce((m, c) => Math.max(m, c.fields?.columnOrder ?? -1), -1) + 1;
+  }
   const ref = await addDoc(collection(db, "users", state.user.uid, "projects", projectId, "cards"), data);
   state.cards.set(ref.id, { id: ref.id, ...data });
   await logAudit(state.user.uid, projectId, [{
@@ -2095,7 +2204,8 @@ async function deleteConnection(connId) {
   await deleteDoc(doc(db, "users", state.user.uid, "projects", projectId, "connections", connId));
   state.connections.delete(connId);
   await logAudit(state.user.uid, projectId, [{
-    entityType: "connection", entityId: connId, field: "deleted", oldValue: { ...conn }, newValue: null
+    entityType: "connection", entityId: connId, field: "deleted",
+    oldValue: { fromCardId: conn.fromCardId, toCardId: conn.toCardId, label: conn.label || "" }, newValue: null
   }], state.project);
   hideConnectionEditor();
   rebuildGraphElements();
@@ -2161,7 +2271,7 @@ function renderEditor(card) {
     ${typeSpecific}
     ${summarySection}
     <div class="editor-actions">
-      <button class="ghost small toggle-connect">Connect to…</button>
+      ${CANVAS_CARD_TYPES.has(card.type) && !isMobileViewport() ? `<button class="ghost small toggle-connect">Connect to…</button>` : ""}
       ${card.type === "character" ? `<button class="ghost small suggest-traits">Suggest traits…</button>` : ""}
       ${card.type === "theme" ? `<button class="ghost small convert-theme-to-concept" title="If this isn't actually an abstract idea — convert it to a Concept">↦ Convert to Concept</button>` : ""}
       ${card.type === "concept" ? `<button class="ghost small convert-concept-to-theme" title="Convert this back to a Theme">↤ Convert to Theme</button>` : ""}
@@ -2247,7 +2357,7 @@ function wireEditor(card) {
   });
   els.cardEditor.querySelector(".close-editor").addEventListener("click", hideCardEditor);
   els.cardEditor.querySelector(".archive-card").addEventListener("click", () => archiveCard(card.id));
-  els.cardEditor.querySelector(".toggle-connect").addEventListener("click", () => startConnectMode(card.id));
+  els.cardEditor.querySelector(".toggle-connect")?.addEventListener("click", () => startConnectMode(card.id));
   els.cardEditor.querySelector(".suggest-traits")?.addEventListener("click", () => handleSuggestTraits(card.id));
   els.cardEditor.querySelector(".merge-into")?.addEventListener("click", () => openMergePicker(card.id));
   els.cardEditor.querySelector(".convert-theme-to-concept")?.addEventListener("click", () => convertCardType(card.id, "theme", "concept"));
@@ -2284,11 +2394,27 @@ async function saveTagPicker(cardId, picker) {
     }
   }
   await updateDoc(doc(db, "users", state.user.uid, "projects", projectId, "cards", cardId), updates);
+  // A scene implements at most one beat (the scene editor's Beat picker is
+  // single-choice): ticking it here takes it off any other beat.
+  if (card.type === "beat" && fieldName === "relatedSceneIds") {
+    const added = ids.filter(id => !old.includes(id));
+    for (const other of state.cards.values()) {
+      if (other.type !== "beat" || other.id === cardId || other.archived) continue;
+      const theirs = other.fields?.relatedSceneIds || [];
+      if (!theirs.some(id => added.includes(id))) continue;
+      const next = theirs.filter(id => !added.includes(id));
+      other.fields.relatedSceneIds = next;
+      other.fields.summaryStale = true;
+      await updateDoc(doc(db, "users", state.user.uid, "projects", projectId, "cards", other.id), {
+        "fields.relatedSceneIds": next, "fields.summaryStale": true, updatedAt: serverTimestamp()
+      });
+    }
+  }
   await logAudit(state.user.uid, projectId, [{
     entityType: "card", entityId: cardId, field: fieldName, oldValue: old, newValue: ids
   }], state.project);
   updateRefreshNudge();
-  rebuildGraphElements();
+  refreshActiveView();
 }
 
 // Convert a card between two structurally-similar types (theme ↔ concept).
@@ -2313,14 +2439,18 @@ async function convertCardType(cardId, fromType, toType) {
   if (toType === "concept") {
     if (card.fields.summary === "") updates["fields.summary"] = "";
     updates["fields.summaryStale"] = !!card.fields.description;
+  } else if (toType === "theme") {
+    // Refresh never processes themes, so a leftover flag would be a permanent ⚠.
+    card.fields = card.fields || {};
+    card.fields.summaryStale = false;
+    updates["fields.summaryStale"] = false;
   }
   await updateDoc(doc(db, "users", state.user.uid, "projects", projectId, "cards", cardId), updates);
   await logAudit(state.user.uid, projectId, [{
     entityType: "card", entityId: cardId, field: "type", oldValue: oldType, newValue: toType
   }], state.project);
   await touchProject();
-  rebuildGraphElements();
-  if (els.wikiView && !els.wikiView.classList.contains("hidden")) renderWiki();
+  refreshActiveView();
   // Re-open editor with new type so the user sees the updated UI
   openCardEditor(cardId);
 }
@@ -2333,7 +2463,7 @@ async function handleSuggestTraits(cardId) {
   }
   const { ok, result: r } = await runLLMAction(
     "Generating trait suggestions",
-    () => suggestTraits(state, cardId)
+    (busy) => suggestTraits(state, cardId, { signal: busy.signal })
   );
   if (!ok) return;
   if (!r || !r.suggestions || r.suggestions.length === 0) {
@@ -2360,16 +2490,26 @@ async function saveField(cardId, input) {
   let value = input.value;
   if (isList) {
     value = value.split("\n").map(s => s.trim()).filter(Boolean);
+  } else if (input.type === "number") {
+    value = Number(value) || 0;
   }
-  const updates = { updatedAt: serverTimestamp() };
+  if (fieldName === "title") {
+    value = String(value).trim();
+    if (!value) {
+      // A card needs a name — put the old one back rather than saving blank.
+      input.value = card.title || "";
+      return;
+    }
+  }
   const oldValue = isTop ? card[fieldName] : card.fields?.[fieldName];
+  // Blur fires on every focus change — only a real edit should write, log
+  // to the audit trail, or mark summaries stale.
+  const normalize = (v) => isList ? toStringList(v) : (v ?? (input.type === "number" ? 0 : ""));
+  if (JSON.stringify(normalize(value)) === JSON.stringify(normalize(oldValue))) return;
+  const updates = { updatedAt: serverTimestamp() };
   if (isTop) {
     card[fieldName] = value;
     updates[fieldName] = value;
-    if (fieldName === "title") {
-      const node = state.cy?.getElementById(cardId);
-      if (node) node.data("label", value);
-    }
   } else {
     card.fields = card.fields || {};
     card.fields[fieldName] = value;
@@ -2390,18 +2530,35 @@ async function saveField(cardId, input) {
     card.fields = card.fields || {};
     card.fields[flag] = true;
     updates[`fields.${flag}`] = true;
+    // A hand-written summary is current by definition — clear its stale flag
+    // so Refresh doesn't keep regenerating (and conflict-prompting) it.
+    const staleFlag = fieldName + "Stale";
+    card.fields[staleFlag] = false;
+    updates[`fields.${staleFlag}`] = false;
   }
 
   const ref = doc(db, "users", state.user.uid, "projects", projectId, "cards", cardId);
-  await updateDoc(ref, updates);
-  await logAudit(state.user.uid, projectId, [{
-    entityType: "card",
-    entityId: cardId,
-    field: fieldName,
-    oldValue,
-    newValue: value
-  }], state.project);
+  try {
+    await updateDoc(ref, updates);
+  } catch (err) {
+    console.error("[save-field] failed", { cardId, fieldName, err });
+    alert(`Couldn't save "${fieldName}": ${err?.message || err}`);
+    return;
+  }
+  try {
+    await logAudit(state.user.uid, projectId, [{
+      entityType: "card",
+      entityId: cardId,
+      field: fieldName,
+      oldValue,
+      newValue: value
+    }], state.project);
+  } catch (err) {
+    console.warn("[save-field] saved, but audit log failed", err);
+  }
   updateRefreshNudge();
+  // Titles, descriptions and stale badges show in every view.
+  refreshActiveView();
 }
 
 // Merge this card INTO another card of the same type. The other card stays
@@ -2468,14 +2625,14 @@ async function mergeCards(sourceId, targetId) {
   const tgtFields = target.fields = target.fields || {};
   const srcFields = source.fields || {};
   const audits = [];
-  const stringFields = ["role", "physicalDescription", "age", "description", "summary", "shortDescription", "longDescription", "structurePosition", "storyRoleSummary", "ragSummary"];
+  const stringFields = ["role", "physicalDescription", "description", "summary", "shortDescription", "longDescription", "structurePosition", "storyRoleSummary", "ragSummary"];
   const arrayFields = ["history", "traits", "characterIds", "locationIds", "arcIds", "relatedSceneIds", "relatedArcIds"];
 
   const updates = {};
   for (const f of stringFields) {
-    const src = (srcFields[f] || "").trim();
+    const src = String(srcFields[f] ?? "").trim();
     if (!src) continue;
-    const tgt = (tgtFields[f] || "").trim();
+    const tgt = String(tgtFields[f] ?? "").trim();
     if (!tgt) {
       tgtFields[f] = src;
       updates[`fields.${f}`] = src;
@@ -2483,6 +2640,11 @@ async function mergeCards(sourceId, targetId) {
       tgtFields[f] = tgt + "\n" + src;
       updates[`fields.${f}`] = tgtFields[f];
     }
+  }
+  // Single values: keep the target's, fill only if it has none.
+  for (const f of ["age"]) {
+    const src = String(srcFields[f] ?? "").trim();
+    if (src && !String(tgtFields[f] ?? "").trim()) { tgtFields[f] = src; updates[`fields.${f}`] = src; }
   }
   for (const f of arrayFields) {
     const src = Array.isArray(srcFields[f]) ? srcFields[f] : [];
@@ -2507,7 +2669,7 @@ async function mergeCards(sourceId, targetId) {
   if (Object.keys(updates).length > 0) {
     if (target.type === "character") { tgtFields.storyRoleSummaryStale = true; updates["fields.storyRoleSummaryStale"] = true; }
     if (target.type === "scene")     { tgtFields.ragSummaryStale       = true; updates["fields.ragSummaryStale"]       = true; }
-    if (target.type === "arc" || target.type === "beat") {
+    if (target.type === "arc" || target.type === "beat" || target.type === "concept") {
       tgtFields.summaryStale = true; updates["fields.summaryStale"] = true;
     }
     updates.updatedAt = serverTimestamp();
@@ -2522,8 +2684,12 @@ async function mergeCards(sourceId, targetId) {
     if (conn.fromCardId === sourceId) { patch.fromCardId = targetId; conn.fromCardId = targetId; changed = true; }
     if (conn.toCardId === sourceId)   { patch.toCardId   = targetId; conn.toCardId   = targetId; changed = true; }
     if (changed) {
-      // Avoid creating a self-loop on the target
-      if (conn.fromCardId === conn.toCardId) {
+      // Drop self-loops, and edges that now duplicate an existing one
+      // (A→C "loves" + B→C "loves", merging B into A).
+      const duplicate = [...state.connections.values()].some(o => o.id !== conn.id &&
+        o.fromCardId === conn.fromCardId && o.toCardId === conn.toCardId &&
+        (o.label || "").trim().toLowerCase() === (conn.label || "").trim().toLowerCase());
+      if (conn.fromCardId === conn.toCardId || duplicate) {
         await deleteDoc(doc(db, "users", state.user.uid, "projects", projectId, "connections", conn.id));
         state.connections.delete(conn.id);
         audits.push({ entityType: "connection", entityId: conn.id, field: "deleted-during-merge", oldValue: null, newValue: null });
@@ -2532,6 +2698,34 @@ async function mergeCards(sourceId, targetId) {
         audits.push({ entityType: "connection", entityId: conn.id, field: "retargeted-during-merge", oldValue: { from: source.id }, newValue: { from: target.id } });
       }
     }
+  }
+
+  // Retarget tag references on other cards (scenes tagging a merged
+  // character/location/arc, beats listing a merged scene/arc) so nothing
+  // keeps pointing at the archived card.
+  const TAG_FIELDS = ["characterIds", "locationIds", "arcIds", "relatedSceneIds", "relatedArcIds"];
+  // Merging scenes: if the surviving scene already sits under a beat, the
+  // source's beat just loses it (a scene implements one beat at most).
+  const targetBeat = source.type === "scene"
+    ? [...state.cards.values()].find(c => c.type === "beat" && !c.archived && (c.fields?.relatedSceneIds || []).includes(targetId))
+    : null;
+  for (const other of state.cards.values()) {
+    if (other.id === sourceId || other.id === targetId) continue;
+    const patch = {};
+    for (const f of TAG_FIELDS) {
+      const ids = other.fields?.[f];
+      if (!Array.isArray(ids) || !ids.includes(sourceId)) continue;
+      const dropOnly = f === "relatedSceneIds" && targetBeat && other.id !== targetBeat.id;
+      const next = dropOnly
+        ? ids.filter(id => id !== sourceId)
+        : [...new Set(ids.map(id => (id === sourceId ? targetId : id)))];
+      other.fields[f] = next;
+      patch[`fields.${f}`] = next;
+    }
+    if (Object.keys(patch).length === 0) continue;
+    patch.updatedAt = serverTimestamp();
+    await updateDoc(doc(db, "users", state.user.uid, "projects", projectId, "cards", other.id), patch);
+    audits.push({ entityType: "card", entityId: other.id, field: "tags-retargeted-during-merge", oldValue: sourceId, newValue: targetId });
   }
 
   // Archive the source card (don't hard-delete — preserves history and audit)
@@ -2548,7 +2742,7 @@ async function mergeCards(sourceId, targetId) {
   await logAudit(state.user.uid, projectId, audits, state.project);
   await touchProject();
   hideCardEditor();
-  rebuildGraphElements();
+  refreshActiveView();
   updateRefreshNudge();
   alert(`Merged "${source.title}" into "${target.title}". The merged card is in the Archive tab if you need it back.`);
   openCardEditor(targetId);
@@ -2565,15 +2759,21 @@ async function archiveCard(cardId) {
   }], state.project);
   await touchProject();
   hideCardEditor();
-  rebuildGraphElements();
+  refreshActiveView();
   updateRefreshNudge();
 }
 
 async function restoreCard(cardId) {
   const ref = doc(db, "users", state.user.uid, "projects", projectId, "cards", cardId);
-  await updateDoc(ref, { archived: false, updatedAt: serverTimestamp() });
   const card = state.cards.get(cardId);
-  if (card) card.archived = false;
+  const patch = { archived: false, updatedAt: serverTimestamp() };
+  // A restored merge source is its own card again.
+  if (card?.fields?.mergedIntoId) patch["fields.mergedIntoId"] = null;
+  await updateDoc(ref, patch);
+  if (card) {
+    card.archived = false;
+    if (card.fields?.mergedIntoId) card.fields.mergedIntoId = null;
+  }
   await logAudit(state.user.uid, projectId, [{
     entityType: "card", entityId: cardId, field: "archived", oldValue: true, newValue: false
   }], state.project);
@@ -2585,6 +2785,10 @@ async function restoreCard(cardId) {
 // --- Connections ---
 
 function startConnectMode(cardId) {
+  // Connections are drawn on the Canvas — jump there if the editor was
+  // opened from another view (Wiki, Kanban, …).
+  if (els.graphView.classList.contains("hidden")) switchView("graph");
+  if (!state.cy) return;
   state.connectMode = true;
   state.connectFrom = cardId;
   hideCardEditor();
@@ -2666,7 +2870,7 @@ function renderOutline() {
     board.appendChild(renderColumn(col, cardsByColumn.get(col.id) || []));
   }
   if (orphaned.length) {
-    const unassigned = { id: "__unassigned__", label: "Unassigned (from old structure)", isMain: false };
+    const unassigned = { id: UNASSIGNED_COLUMN_ID, label: "Unassigned (from old structure)", isMain: false };
     board.appendChild(renderColumn(unassigned, orphaned));
   }
 
@@ -2674,6 +2878,8 @@ function renderOutline() {
   // surface — but keep it for the (hidden) outlineEmpty fallback.
   hide(els.outlineEmpty);
 }
+
+const UNASSIGNED_COLUMN_ID = "__unassigned__";
 
 function renderColumn(col, cards) {
   const colEl = document.createElement("section");
@@ -2735,12 +2941,21 @@ function renderColumn(col, cards) {
     // If the drop happened on a specific card slot it'll be handled there.
     // Falling through to here means: drop at the end of this column.
     if (e.target.closest(".outline-card")) return;
+    if (col.id === UNASSIGNED_COLUMN_ID) return; // not a real column
     await moveCardToColumn(cardId, col.id, /*beforeCardId*/ null);
     renderOutline();
   });
 
   for (const card of cards) {
     body.appendChild(renderOutlineCard(card, col));
+  }
+
+  if (col.id === UNASSIGNED_COLUMN_ID) {
+    const hint = document.createElement("p");
+    hint.className = "muted small outline-col-actions";
+    hint.textContent = "These cards' column doesn't exist in the current structure — drag them into a column.";
+    colEl.appendChild(hint);
+    return colEl;
   }
 
   const addRow = document.createElement("div");
@@ -2754,7 +2969,7 @@ function renderColumn(col, cards) {
   addRow.querySelector(".add-beat").addEventListener("click", () => createCardInColumn("beat", col.id));
   addRow.querySelector(".suggest-scene").addEventListener("click", () => {
     const lastSceneId = [...cards].reverse().find(c => c.type === "scene")?.id || null;
-    handleScenePlus(lastSceneId, null, col.id);
+    handleScenePlus(lastSceneId, null, null, col.id);
   });
   colEl.appendChild(addRow);
 
@@ -2809,15 +3024,19 @@ function renderOutlineCard(card, col) {
     if (!droppedId || droppedId === card.id) return;
     const rect = el.getBoundingClientRect();
     const before = (e.clientY - rect.top) < rect.height / 2;
-    await moveCardToColumn(droppedId, col.id, before ? card.id : nextCardIdAfter(card.id, col.id));
+    if (col.id === UNASSIGNED_COLUMN_ID) return; // not a real column
+    await moveCardToColumn(droppedId, col.id, before ? card.id : nextCardIdAfter(card.id, col.id, droppedId));
     renderOutline();
   });
   return el;
 }
 
-function nextCardIdAfter(cardId, colId) {
+// The card that follows cardId in its column, ignoring the card being dragged
+// (dropping B below A where B already follows A must keep B there, not
+// resolve "before B" → not found → end of column).
+function nextCardIdAfter(cardId, colId, excludeId = null) {
   const cards = [...state.cards.values()]
-    .filter(c => !c.archived && (c.type === "scene" || c.type === "beat") && c.fields?.columnId === colId)
+    .filter(c => !c.archived && c.id !== excludeId && (c.type === "scene" || c.type === "beat") && c.fields?.columnId === colId)
     .sort((a, b) => (a.fields?.columnOrder ?? 0) - (b.fields?.columnOrder ?? 0));
   const idx = cards.findIndex(c => c.id === cardId);
   return idx >= 0 && idx + 1 < cards.length ? cards[idx + 1].id : null;
@@ -3143,28 +3362,33 @@ function makePlusButton(beforeSceneId, afterSceneId, beatId) {
   return wrap;
 }
 
-async function handleScenePlus(beforeSceneId, afterSceneId, beatId) {
-  console.log("[scene-plus] clicked", { beforeSceneId, afterSceneId, beatId });
+// beforeSceneId/afterSceneId are the neighbours the new scene sits between;
+// columnId is the outline column it belongs to (defaults to the neighbour's).
+async function handleScenePlus(beforeSceneId, afterSceneId, beatId, columnId) {
+  console.log("[scene-plus] clicked", { beforeSceneId, afterSceneId, beatId, columnId });
   if (!isConfigured()) {
     if (confirm("No LLM provider configured. Open Settings?")) openSettingsModal();
     return;
   }
   const { ok, result: gen } = await runLLMAction(
     "Generating scene proposal",
-    () => generateScene(state, { beforeSceneId, afterSceneId })
+    (busy) => generateScene(state, { beforeSceneId, afterSceneId, columnId }, { signal: busy.signal })
   );
   if (!ok || !gen) return;
   openSceneProposalModal(gen, {
     onAccept: async (edited) => {
       const position = beforeSceneId ? { afterId: beforeSceneId } : (afterSceneId ? { beforeId: afterSceneId } : null);
-      const newId = await insertGeneratedScene(state, projectId, edited, position);
+      const colId = columnId
+        || state.cards.get(beforeSceneId || afterSceneId)?.fields?.columnId
+        || defaultColumnId(state.project);
+      const newId = await insertGeneratedScene(state, projectId, edited, { ...position, columnId: colId });
       // Inherit the beat group the user dropped the + button under
       if (beatId) await setSceneBeat(newId, beatId);
       await touchProject();
-      renderOutline();
       rebuildGraphElements();
       updateRefreshNudge();
-      switchView("graph");
+      // Stay where the writer was (scenes don't appear on the Canvas).
+      if (!els.outlineView.classList.contains("hidden")) renderOutline();
       openCardEditor(newId);
     }
   });

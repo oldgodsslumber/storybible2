@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>The Writer's Assistant — Project</title>
-  <link rel="stylesheet" href="./css/shared.css" />
-  <link rel="stylesheet" href="./css/project.css" />
+  <link rel="stylesheet" href="./css/shared.css?v=20261024" />
+  <link rel="stylesheet" href="./css/project.css?v=20261024" />
   <script src="https://unpkg.com/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
 </head>
 <body>
@@ -30,7 +30,7 @@
     <div class="user-area" id="userArea"></div>
   </header>
   <script type="module">
-    import { mountSettingsButton } from "./js/settings.js?v=20260530";
+    import { mountSettingsButton } from "./js/settings.js?v=20261024";
     const ua = document.getElementById("userArea");
     new MutationObserver(() => {
       if (!ua.querySelector("button.settings-mounted") && ua.children.length > 0) {
@@ -99,10 +99,10 @@
     <section id="outlineView" class="view hidden">
       <div class="outline-header">
         <h2>Outline</h2>
-        <p class="muted">Drag a scene by its handle to reorder, or click + Suggest scene here to have the LLM propose a bridging scene.</p>
+        <p class="muted">Drag scenes and beats to reorder them or move them between columns. Use 🎲 Suggest scene to have the LLM propose a scene at the end of a column.</p>
       </div>
       <ol id="outlineList" class="outline-list"></ol>
-      <p id="outlineEmpty" class="muted hidden">No scene cards yet. Add one from the Graph view.</p>
+      <p id="outlineEmpty" class="muted hidden">No scene cards yet. Add one with + Scene in any column.</p>
     </section>
 
     <!-- REVIEW VIEW -->
@@ -223,6 +223,6 @@
     </section>
   </main>
 
-  <script type="module" src="./js/project.js?v=20260603e"></script>
+  <script type="module" src="./js/project.js?v=20261024"></script>
 </body>
 </html>

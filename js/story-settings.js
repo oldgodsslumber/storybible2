@@ -3,7 +3,7 @@
 // genre, premise, narrative structure, and the writer's established terms
 // (e.g. "Curtain Fall" is the giant stormcloud, not a curtain falling).
 
-import { db } from "./shared.js";
+import { db } from "./shared.js?v=20261024";
 import {
   doc, updateDoc, serverTimestamp, collection, getDocs, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
@@ -152,6 +152,26 @@ export function getColumnsForProject(project) {
   return cols;
 }
 
+// Map an LLM column hint ("act-2", "Act II", "act 2", "Mid-Point") onto one
+// of the project's column ids. Roman and arabic numerals are treated alike so
+// "Act 3" finds a column labelled "Act III".
+export function resolveColumnHint(hint, columns, fallbackId) {
+  if (!hint) return fallbackId;
+  const norm = (s) => String(s).trim().toLowerCase()
+    .replace(/\b(iii|ii|iv|vi|v|i)\b/g, r => ({ i: "1", ii: "2", iii: "3", iv: "4", v: "5", vi: "6" }[r]))
+    .replace(/[^a-z0-9]+/g, " ").trim();
+  const raw = String(hint).trim().toLowerCase();
+  const byId = columns.find(c => c.id === raw);
+  if (byId) return byId.id;
+  const h = norm(hint);
+  const byLabel = columns.find(c => norm(c.label) === h);
+  if (byLabel) return byLabel.id;
+  const byPrefix = columns.find(c => norm(c.label).startsWith(h) || h.startsWith(norm(c.label)));
+  if (byPrefix) return byPrefix.id;
+  console.warn("[columns] columnHint did not match any column; falling back to default", { hint, fallbackId });
+  return fallbackId;
+}
+
 // Default column for new scenes/beats: the first main-story column.
 export function defaultColumnId(project) {
   const cols = getColumnsForProject(project);
@@ -267,51 +287,140 @@ export function buildProjectContext(project) {
   return lines.join("\n");
 }
 
-// One-click migration: switch a project to the story-bible-default structure
-// and remap card columnIds according to remapColumnIdsForNewDefault.
-// Updates Firestore in a single batch and refreshes state.
+// Leaving the Story Bible default (Act I / Act II / Mid-Point / Crisis /
+// Climax / Act III): its acts aren't evenly sized, so map by meaning — the
+// Mid-Point and Crisis belong to the middle act, the Climax to the last.
+const FROM_DEFAULT_REMAP = {
+  "3-act":         { "act-1": "act-1", "act-2": "act-2", "act-3": "act-2", "act-4": "act-2", "act-5": "act-3", "act-6": "act-3" },
+  "heros-journey": { "act-1": "act-1", "act-2": "act-2", "act-3": "act-2", "act-4": "act-2", "act-5": "act-3", "act-6": "act-3" },
+  "5-act":         { "act-1": "act-1", "act-2": "act-2", "act-3": "act-2", "act-4": "act-2", "act-5": "act-3", "act-6": "act-4" },
+  "kishotenketsu": { "act-1": "act-1", "act-2": "act-2", "act-3": "act-2", "act-4": "act-3", "act-5": "act-3", "act-6": "act-4" },
+  "save-the-cat":  { "act-1": "act-1", "act-2": "act-2", "act-3": "act-3", "act-4": "act-4", "act-5": "act-5", "act-6": "act-6" },
+  "free":          { "act-1": "act-1", "act-2": "act-1", "act-3": "act-1", "act-4": "act-1", "act-5": "act-1", "act-6": "act-1" }
+};
+
+// Map each main column of `fromStructure` onto a column of `toStructure`.
+// Switching to the Story Bible default uses the hand-written analogues above;
+// any other switch maps acts proportionally (first act → first act, last →
+// last, the middle spread evenly). Prologue/epilogue always stay put.
+export function columnRemapBetween(fromStructure, toStructure) {
+  if (fromStructure === toStructure) return {};
+  if (toStructure === "story-bible-default") {
+    const known = remapColumnIdsForNewDefault(fromStructure);
+    if (known) return known;
+  }
+  if (fromStructure === "story-bible-default" && FROM_DEFAULT_REMAP[toStructure]) {
+    return FROM_DEFAULT_REMAP[toStructure];
+  }
+  const oldN = (STRUCTURE_COLUMNS[fromStructure] || STRUCTURE_COLUMNS["5-act"]).length;
+  const newN = (STRUCTURE_COLUMNS[toStructure] || STRUCTURE_COLUMNS["5-act"]).length;
+  const map = {};
+  for (let k = 1; k <= oldN; k++) {
+    const target = oldN === 1 ? 1 : Math.round(((k - 1) * (newN - 1)) / (oldN - 1)) + 1;
+    map[`act-${k}`] = `act-${target}`;
+  }
+  return map;
+}
+
+// Human-readable lines for a confirm dialog: "Act 3: Climax → Climax".
+export function describeColumnRemap(fromStructure, toStructure, remap) {
+  const label = (structure, id) => {
+    const cols = getColumnsForProject({ storySettings: { structure } });
+    return cols.find(c => c.id === id)?.label || id;
+  };
+  return Object.entries(remap)
+    .map(([from, to]) => `  • ${label(fromStructure, from)} → ${label(toStructure, to)}`)
+    .join("\n");
+}
+
+// Scene/beat cards a remap would move (local state, non-archived).
+export function cardsAffectedByRemap(state, remap) {
+  return [...state.cards.values()].filter(c =>
+    (c.type === "scene" || c.type === "beat") && !c.archived &&
+    remap[c.fields?.columnId] && remap[c.fields.columnId] !== c.fields.columnId);
+}
+
+// Move cards per `remap` and flip the project to `toStructure`. Cards that
+// land in the same column keep their relative story order: whatever was
+// already there first, then the arrivals ordered by their old column and
+// position (so Falling Action stays ahead of Denouement instead of
+// interleaving). Writes in ≤450-op batches; the structure flip goes in the
+// last batch so a partial failure leaves the project on its old structure,
+// and local state only changes after everything has committed.
+export async function applyColumnRemap(state, projectId, fromStructure, toStructure, remap) {
+  const outlineCards = [...state.cards.values()].filter(c => (c.type === "scene" || c.type === "beat") && !c.archived);
+  const oldColIndex = new Map(getColumnsForProject({ storySettings: { structure: fromStructure } }).map((c, i) => [c.id, i]));
+  const destOf = (c) => {
+    const cur = c.fields?.columnId;
+    return (remap[cur] && remap[cur] !== cur) ? remap[cur] : cur;
+  };
+  const byDest = new Map();
+  for (const c of outlineCards) {
+    const d = destOf(c);
+    if (!byDest.has(d)) byDest.set(d, []);
+    byDest.get(d).push(c);
+  }
+  const plan = []; // { card, columnId, columnOrder }
+  for (const [dest, cards] of byDest) {
+    const moved = (c) => destOf(c) !== c.fields?.columnId;
+    cards.sort((a, b) =>
+      (Number(moved(a)) - Number(moved(b))) ||
+      ((oldColIndex.get(a.fields?.columnId) ?? 99) - (oldColIndex.get(b.fields?.columnId) ?? 99)) ||
+      ((a.fields?.columnOrder ?? 0) - (b.fields?.columnOrder ?? 0)));
+    cards.forEach((c, i) => {
+      if (c.fields?.columnId !== dest || (c.fields?.columnOrder ?? -1) !== i) plan.push({ card: c, columnId: dest, columnOrder: i });
+    });
+  }
+
+  const cardRef = (id) => doc(db, "users", state.user.uid, "projects", projectId, "cards", id);
+  const CHUNK = 450;
+  for (let i = 0; i < plan.length || i === 0; i += CHUNK) {
+    const batch = writeBatch(db);
+    for (const p of plan.slice(i, i + CHUNK)) {
+      batch.update(cardRef(p.card.id), { "fields.columnId": p.columnId, "fields.columnOrder": p.columnOrder, updatedAt: serverTimestamp() });
+    }
+    const isLast = i + CHUNK >= plan.length;
+    if (isLast) {
+      batch.update(doc(db, "users", state.user.uid, "projects", projectId), {
+        "storySettings.structure": toStructure,
+        updatedAt: serverTimestamp()
+      });
+    }
+    await batch.commit();
+    if (isLast) break;
+  }
+
+  const movedCount = plan.filter(p => p.card.fields?.columnId !== p.columnId).length;
+  for (const p of plan) {
+    p.card.fields = p.card.fields || {};
+    p.card.fields.columnId = p.columnId;
+    p.card.fields.columnOrder = p.columnOrder;
+  }
+  state.project.storySettings = state.project.storySettings || {};
+  state.project.storySettings.structure = toStructure;
+  return { ok: true, movedCount, fromStructure };
+}
+
+// One-click migration to the Story Bible default structure.
 export async function migrateProjectToNewDefault(state, projectId) {
   const current = getStorySettings(state.project);
   if (current.structure === "story-bible-default") {
     return { ok: false, reason: "already-on-default" };
   }
-  const remap = remapColumnIdsForNewDefault(current.structure) || {};
-  const cardsRef = collection(db, "users", state.user.uid, "projects", projectId, "cards");
-  const snap = await getDocs(cardsRef);
+  const remap = columnRemapBetween(current.structure, "story-bible-default");
+  return applyColumnRemap(state, projectId, current.structure, "story-bible-default", remap);
+}
 
-  // Build the batch of card updates
-  const batch = writeBatch(db);
-  let movedCount = 0;
-  snap.forEach(d => {
-    const data = d.data();
-    if (data.type !== "scene" && data.type !== "beat") return;
-    const cur = data.fields?.columnId;
-    if (!cur) return;
-    const next = remap[cur];
-    if (!next || next === cur) return;
-    batch.update(d.ref, {
-      "fields.columnId": next,
-      updatedAt: serverTimestamp()
-    });
-    // Update local state too
-    const local = state.cards.get(d.id);
-    if (local) {
-      local.fields = local.fields || {};
-      local.fields.columnId = next;
-    }
-    movedCount++;
-  });
-
-  // Also update the project's structure setting
-  state.project.storySettings = state.project.storySettings || {};
-  state.project.storySettings.structure = "story-bible-default";
-  batch.update(doc(db, "users", state.user.uid, "projects", projectId), {
-    "storySettings.structure": "story-bible-default",
-    updatedAt: serverTimestamp()
-  });
-
-  await batch.commit();
-  return { ok: true, movedCount, fromStructure: current.structure };
+// Sort scene cards into reading order: outline column (prologue → acts →
+// epilogue), then position within the column. Cards in unknown columns go
+// last. This is the order the writer sees on the Outline board.
+export function sortScenesByOutline(scenes, project) {
+  const colIndex = new Map(getColumnsForProject(project).map((c, i) => [c.id, i]));
+  const rank = (c) => colIndex.has(c.fields?.columnId) ? colIndex.get(c.fields.columnId) : colIndex.size;
+  return [...scenes].sort((a, b) =>
+    (rank(a) - rank(b)) ||
+    ((a.fields?.columnOrder ?? 0) - (b.fields?.columnOrder ?? 0)) ||
+    ((a.order ?? 0) - (b.order ?? 0)));
 }
 
 export function openStorySettingsModal(state, projectId, { onSaved } = {}) {
@@ -380,6 +489,7 @@ export function openStorySettingsModal(state, projectId, { onSaved } = {}) {
   `;
   document.body.appendChild(overlay);
 
+  let structureAtOpen = s.structure;
   const listEl = overlay.querySelector("#ss-anchor-list");
   function addAnchorRow(term = "", definition = "") {
     const li = document.createElement("li");
@@ -411,9 +521,13 @@ export function openStorySettingsModal(state, projectId, { onSaved } = {}) {
   overlay.querySelector("#ss-migrate-btn")?.addEventListener("click", async () => {
     const btn = overlay.querySelector("#ss-migrate-btn");
     const status = overlay.querySelector("#ss-migrate-status");
-    const ok = confirm("Switch this project to the new Story Bible default structure?\n\nYour scenes and beats will be remapped:\n  - Act I and Act II stay where they are\n  - Climax content moves to the new Climax column\n  - Falling Action and Denouement move to Act III\n  - Mid-Point and Crisis start empty (new concepts)\n\nThis writes to Firestore. Continue?");
+    const from = getStorySettings(state.project).structure;
+    const remap = columnRemapBetween(from, "story-bible-default");
+    const ok = confirm(`Switch this project to the Story Bible default structure?\n\nYour scenes and beats will move like this:\n${describeColumnRemap(from, "story-bible-default", remap)}\n\nColumns not listed start empty. Continue?`);
     if (!ok) return;
     btn.disabled = true;
+    const saveBtn = overlay.querySelector(".save");
+    saveBtn.disabled = true; // a Save mid-migration would write the old structure back
     status.textContent = "Migrating…";
     try {
       const res = await migrateProjectToNewDefault(state, projectId);
@@ -422,15 +536,17 @@ export function openStorySettingsModal(state, projectId, { onSaved } = {}) {
         return;
       }
       status.textContent = `Done — moved ${res.movedCount} card${res.movedCount === 1 ? "" : "s"} to the new structure.`;
-      // Refresh story-settings modal UI to reflect the new state without forcing a page reload
-      setTimeout(() => {
-        close();
-        onSaved?.(getStorySettings(state.project));
-      }, 1500);
+      // Keep the form in sync (so Save doesn't write the old structure back)
+      // and leave the modal open — the writer may have unsaved edits here.
+      overlay.querySelector("#ss-structure").value = "story-bible-default";
+      structureAtOpen = "story-bible-default";
+      onSaved?.(getStorySettings(state.project));
     } catch (err) {
       console.error("[story-settings] migrate failed", err);
       status.textContent = "Migration failed: " + (err.message || err);
       btn.disabled = false;
+    } finally {
+      saveBtn.disabled = false;
     }
   });
 
@@ -451,6 +567,19 @@ export function openStorySettingsModal(state, projectId, { onSaved } = {}) {
       epilogue:   overlay.querySelector("#ss-epilogue").value.trim()
     };
     try {
+      if (next.structure !== structureAtOpen) {
+        // Without this, cards in columns the new structure lacks fall into
+        // "Unassigned", and cards that keep an id end up under the wrong label.
+        const remap = columnRemapBetween(structureAtOpen, next.structure);
+        const affected = cardsAffectedByRemap(state, remap);
+        if (affected.length) {
+          const fromLabel = STRUCTURE_OPTIONS.find(o => o.id === structureAtOpen)?.label || structureAtOpen;
+          const toLabel = STRUCTURE_OPTIONS.find(o => o.id === next.structure)?.label || next.structure;
+          const go = confirm(`Change structure from "${fromLabel}" to "${toLabel}"?\n\n${affected.length} scene/beat card${affected.length === 1 ? "" : "s"} will move to the closest matching columns:\n${describeColumnRemap(structureAtOpen, next.structure, remap)}\n\nYou can drag cards afterwards to fine-tune.`);
+          if (!go) return;
+        }
+        await applyColumnRemap(state, projectId, structureAtOpen, next.structure, remap);
+      }
       await updateDoc(
         doc(db, "users", state.user.uid, "projects", projectId),
         { storySettings: next, updatedAt: serverTimestamp() }

@@ -168,9 +168,11 @@ body { display: flex; flex-direction: column; height: 100vh; }
 }
 .editor-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
 }
+.editor-actions button { white-space: nowrap; }
 
 /* Outline view */
 .outline-header { margin-bottom: 16px; }
@@ -226,6 +228,8 @@ body { display: flex; flex-direction: column; height: 100vh; }
   .user-area .user-email { display: none; }
 
   /* Bottom tab bar */
+  /* Recovery banner sits above the tab bar instead of covering it. */
+  #recoveryBanner { bottom: calc(60px + env(safe-area-inset-bottom)) !important; max-height: 45vh !important; }
   .mobile-tabbar {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
