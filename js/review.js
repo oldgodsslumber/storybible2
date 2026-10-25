@@ -5,16 +5,16 @@
 // arc.summary). If summaries are missing, the prompt instructs the model to
 // use raw content as a fallback.
 
-import { db } from "./shared.js?v=20261024";
+import { db } from "./shared.js?v=20261025";
 import {
   doc, updateDoc, addDoc, collection, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { callLLM, parseJsonLoose, isConfigured, callLLMJson } from "./llm.js?v=20261024";
-import { openSettingsModal } from "./settings.js?v=20261024";
-import { logAudit } from "./audit.js?v=20261024";
-import { openBusyOverlay } from "./shared.js?v=20261024";
-import { buildProjectContext, sortScenesByOutline, getColumnsForProject, defaultColumnId, resolveColumnHint } from "./story-settings.js?v=20261024";
-import { blankFieldsForType } from "./shared.js?v=20261024";
+import { callLLM, parseJsonLoose, isConfigured, callLLMJson } from "./llm.js?v=20261025";
+import { openSettingsModal } from "./settings.js?v=20261025";
+import { logAudit } from "./audit.js?v=20261025";
+import { openBusyOverlay } from "./shared.js?v=20261025";
+import { buildProjectContext, sortScenesByOutline, getColumnsForProject, defaultColumnId, resolveColumnHint } from "./story-settings.js?v=20261025";
+import { blankFieldsForType } from "./shared.js?v=20261025";
 
 function ctx(state) { return buildProjectContext(state?.project); }
 
@@ -146,7 +146,7 @@ export async function reviewCharacterArc(state, characterId, { signal } = {}) {
   const scenes = scenesFeaturingByName(state, ch.title);
   const payload = {
     character: pickCharacter(ch),
-    scenesInOrder: scenes.map(pickScene),
+    scenesInOrder: scenes.map(s => pickScene(s, state)),
     themes: themeList(state)
   };
   return callJson(ctx(state) + ARC_REVIEW_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`, signal);
@@ -158,7 +158,7 @@ export async function generateSynopsis(state, { signal } = {}) {
     project: { title: state.project.title, logline: state.project.logline, themeText: state.project.themeText },
     themes: themeList(state),
     characters: characterList(state).map(pickCharacter),
-    scenesInOrder: sceneList(state).map(pickScene)
+    scenesInOrder: sceneList(state).map(s => pickScene(s, state))
   };
   return callJson(ctx(state) + SYNOPSIS_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`, signal);
 }
@@ -168,7 +168,7 @@ export async function themeCoherence(state, { signal } = {}) {
   const payload = {
     themes: themeList(state),
     characters: characterList(state).map(pickCharacter),
-    scenes: sceneList(state).map(pickScene)
+    scenes: sceneList(state).map(s => pickScene(s, state))
   };
   return callJson(ctx(state) + THEME_COHERENCE_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`, signal);
 }
@@ -178,13 +178,13 @@ export async function generateScene(state, { beforeSceneId, afterSceneId, column
   const before = beforeSceneId ? state.cards.get(beforeSceneId) : null;
   const after  = afterSceneId  ? state.cards.get(afterSceneId)  : null;
   const payload = {
-    precedingScene: before ? pickScene(before) : null,
-    followingScene: after  ? pickScene(after)  : null,
+    precedingScene: before ? pickScene(before, state) : null,
+    followingScene: after  ? pickScene(after, state)  : null,
     themes: themeList(state),
     existingCharacterNames: characterList(state).map(c => c.title),
     existingLocationNames:  locationList(state).map(c => c.title),
     targetColumn: columnLabel(state, columnId || before?.fields?.columnId || after?.fields?.columnId),
-    nearbyScenes: nearbyScenes(state, before || after, 30).map(pickScene)
+    nearbyScenes: nearbyScenes(state, before || after, 30).map(s => pickScene(s, state))
   };
   return callJson(ctx(state) + SCENE_GEN_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`, signal);
 }
@@ -208,7 +208,7 @@ export async function analyzeArcTension(state, arcId, newSummary, { signal } = {
   const scenes = sceneList(state).filter(s => (s.fields?.arcIds || []).includes(arcId));
   const payload = {
     arc: { title: arc.title, newSummary },
-    scenes: scenes.map(pickScene)
+    scenes: scenes.map(s => pickScene(s, state))
   };
   return callJson(ctx(state) + TENSION_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`, signal);
 }
@@ -272,11 +272,14 @@ function pickCharacter(c) {
     storyRoleSummary: f.storyRoleSummary || null
   };
 }
-function pickScene(s) {
+function pickScene(s, state) {
   const f = s.fields || {};
   return {
     title: s.title,
     column: s.fields?.columnId || "",
+    pov: s.fields?.povCharacterId ? (state?.cards?.get(s.fields.povCharacterId)?.title || "") : "",
+    goal: f.goal || "", conflict: f.conflict || "", outcome: f.outcome || "",
+    change: f.change || "", valueShift: f.valueShift || "",
     shortDescription: f.shortDescription || "",
     ragSummary: f.ragSummary || "",
     characterIds: f.characterIds || [],

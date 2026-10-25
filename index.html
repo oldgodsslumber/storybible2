@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>The Writer's Assistant — Dashboard</title>
-  <link rel="stylesheet" href="./css/shared.css?v=20261024" />
-  <link rel="stylesheet" href="./css/dashboard.css?v=20261024" />
+  <link rel="stylesheet" href="./css/shared.css?v=20261025" />
+  <link rel="stylesheet" href="./css/dashboard.css?v=20261025" />
 </head>
 <body>
   <header class="topbar">
@@ -13,7 +13,7 @@
     <div class="user-area" id="userArea"></div>
   </header>
   <script type="module">
-    import { mountSettingsButton } from "./js/settings.js?v=20261024";
+    import { mountSettingsButton } from "./js/settings.js?v=20261025";
     // Mount once auth area is populated by dashboard.js — observe.
     const ua = document.getElementById("userArea");
     new MutationObserver(() => {
@@ -59,6 +59,6 @@
     </section>
   </main>
 
-  <script type="module" src="./js/dashboard.js?v=20261024"></script>
+  <script type="module" src="./js/dashboard.js?v=20261025"></script>
 </body>
 </html>

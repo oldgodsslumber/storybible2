@@ -8,7 +8,7 @@
 // timestamp is Date.now() (ms since epoch). We can't use serverTimestamp()
 // inside arrayUnion(), and for change-ordering purposes client time is fine.
 
-import { db } from "./shared.js?v=20261024";
+import { db } from "./shared.js?v=20261025";
 import {
   doc, updateDoc, arrayUnion, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";

@@ -63,6 +63,11 @@ This repo implements **M1 + M2 + M3 + M4 + M5** of the spec (`Story_Bible_App_Sp
 - Clicking a card on the board jumps to its full editor in the Graph view
 - Separate from the story bible workspace — no narrative-graph cards (characters, themes, etc.) appear here
 
+## Planning aids (js/planning.js)
+
+- **What each scene does** — every scene card has POV, goal, conflict, outcome, what changes, and a value shift (▲ ends better / ▼ worse / ⇅ reversal / ● nothing changes). Fill them by hand, per scene ("✨ Fill empty fields from the description"), or for every scene at once ("✨ Analyze what each scene does" on the Outline). The LLM only fills empty fields. Outline cards show the POV and shift, and flag "nothing changes" scenes; reviews and the synopsis use these fields.
+- **Structure checklist** — top of the Outline. Lists the beats the project's structure expects (6 for the Story Bible default, 15 for Save the Cat, 12 for the Hero's Journey, …), ticks off beat cards that match by structure position or title, adds missing beats as placeholders in the right column, shows scenes-per-column against a rough pacing guide, and can ask the LLM to review the outline for missing or weak turns.
+
 ## Stretch goals not implemented
 
 The spec lists these as stretch goals (section 15) — not built:

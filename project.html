@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>The Writer's Assistant — Project</title>
-  <link rel="stylesheet" href="./css/shared.css?v=20261024" />
-  <link rel="stylesheet" href="./css/project.css?v=20261024" />
+  <link rel="stylesheet" href="./css/shared.css?v=20261025" />
+  <link rel="stylesheet" href="./css/project.css?v=20261025" />
   <script src="https://unpkg.com/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
 </head>
 <body>
@@ -30,7 +30,7 @@
     <div class="user-area" id="userArea"></div>
   </header>
   <script type="module">
-    import { mountSettingsButton } from "./js/settings.js?v=20261024";
+    import { mountSettingsButton } from "./js/settings.js?v=20261025";
     const ua = document.getElementById("userArea");
     new MutationObserver(() => {
       if (!ua.querySelector("button.settings-mounted") && ua.children.length > 0) {
@@ -100,6 +100,7 @@
       <div class="outline-header">
         <h2>Outline</h2>
         <p class="muted">Drag scenes and beats to reorder them or move them between columns. Use 🎲 Suggest scene to have the LLM propose a scene at the end of a column.</p>
+        <button id="analyzeScenesBtn" class="ghost small" type="button" title="Have the LLM fill in POV, goal, conflict, outcome and value shift for scenes that don't have them yet">✨ Analyze what each scene does</button>
       </div>
       <ol id="outlineList" class="outline-list"></ol>
       <p id="outlineEmpty" class="muted hidden">No scene cards yet. Add one with + Scene in any column.</p>
@@ -223,6 +224,6 @@
     </section>
   </main>
 
-  <script type="module" src="./js/project.js?v=20261024"></script>
+  <script type="module" src="./js/project.js?v=20261025"></script>
 </body>
 </html>

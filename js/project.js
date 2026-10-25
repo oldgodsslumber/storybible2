@@ -1,27 +1,31 @@
 import {
   auth, db, onAuthChange, renderUserArea, show, hide, blankFieldsForType, CARD_TYPES, KANBAN_STAGES, openBusyOverlay
-} from "./shared.js?v=20261024";
+} from "./shared.js?v=20261025";
 import {
   doc, getDoc, getDocs, collection, addDoc, updateDoc, deleteDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { isConfigured, getSettings } from "./llm.js?v=20261024";
-import { openSettingsModal } from "./settings.js?v=20261024";
+import { isConfigured, getSettings } from "./llm.js?v=20261025";
+import { openSettingsModal } from "./settings.js?v=20261025";
 import {
   extractFromIdeaDump, parseSidePanelNote, runGapAnalysis,
   openApprovalModal, openWizardModal
-} from "./extraction.js?v=20261024";
-import { logAudit, staleImpact, changesSinceLastRefresh } from "./audit.js?v=20261024";
-import { runGlobalRefresh, provideStateRef } from "./refresh.js?v=20261024";
+} from "./extraction.js?v=20261025";
+import { logAudit, staleImpact, changesSinceLastRefresh } from "./audit.js?v=20261025";
+import { runGlobalRefresh, provideStateRef } from "./refresh.js?v=20261025";
 import {
   renderReviewPanel, generateScene, insertGeneratedScene,
   suggestTraits, applyTraitSuggestions, openTraitSuggestModal,
   openSceneProposalModal,
   reviewCharacterArc, persistCharacterArcReview
-} from "./review.js?v=20261024";
-import { renderOracle } from "./oracle.js?v=20261024";
-import { openStorySettingsModal, getColumnsForProject, defaultColumnId, resolveColumnHint, sortScenesByOutline } from "./story-settings.js?v=20261024";
-import { provideExtractionStateRef } from "./extraction.js?v=20261024";
-import { mountLlmConfigBanner } from "./settings.js?v=20261024";
+} from "./review.js?v=20261025";
+import { renderOracle } from "./oracle.js?v=20261025";
+import { openStorySettingsModal, getColumnsForProject, defaultColumnId, resolveColumnHint, sortScenesByOutline } from "./story-settings.js?v=20261025";
+import { provideExtractionStateRef } from "./extraction.js?v=20261025";
+import {
+  sceneFunctionEditorHtml, sceneFunctionBadgesHtml, analyzeSceneFunctions, hasSceneFunction,
+  SCENE_FUNCTION_FIELDS, valueShiftInfo, renderStructurePanel, reviewStructure
+} from "./planning.js?v=20261025";
+import { mountLlmConfigBanner } from "./settings.js?v=20261025";
 
 const REFRESH_NUDGE_THRESHOLD = 60;
 
@@ -1165,6 +1169,7 @@ function switchView(name) {
   // switching to any view other than outline. Otherwise they shadow other views.
   if (name !== "outline") {
     document.getElementById("beatSpine")?.remove();
+    document.getElementById("structurePanel")?.remove();
     document.getElementById("prologueSection")?.remove();
     document.getElementById("epilogueSection")?.remove();
   }
@@ -1411,6 +1416,16 @@ function renderWikiScene(card, f) {
   if (f.shortDescription) sections.push(`<section class="wiki-section"><h3>Short description</h3><p>${esc(f.shortDescription)}</p></section>`);
   if (f.longDescription)  sections.push(`<section class="wiki-section"><h3>Long description</h3>${proseToHtml(f.longDescription)}</section>`);
   if (f.ragSummary)       sections.push(`<section class="wiki-section"><h3>Summary ${f.ragSummaryStale ? '<span class="stale-icon">⚠ stale</span>' : ""}</h3>${proseToHtml(f.ragSummary)}</section>`);
+  if (hasSceneFunction(f)) {
+    const pov = f.povCharacterId ? state.cards.get(f.povCharacterId) : null;
+    const shift = valueShiftInfo(f.valueShift);
+    const row = (label, v) => v ? `<dt>${label}</dt><dd>${esc(v)}</dd>` : "";
+    sections.push(`<section class="wiki-section"><h3>What this scene does</h3><dl class="wiki-sf">
+      ${pov ? `<dt>Point of view</dt><dd>${cardLink(pov.id)}</dd>` : ""}
+      ${row("Goal", f.goal)}${row("Conflict", f.conflict)}${row("Outcome", f.outcome)}${row("What changes", f.change)}
+      ${shift ? `<dt>Value shift</dt><dd>${shift.icon} ${esc(shift.label)}</dd>` : ""}
+    </dl></section>`);
+  }
 
   // Tagged people / places / arcs
   const tagSections = [];
@@ -2234,6 +2249,7 @@ function renderEditor(card) {
     typeSpecific = `
       <label>Short Description <textarea data-field="shortDescription" rows="2">${esc(f.shortDescription)}</textarea></label>
       <label>Long Description <textarea data-field="longDescription" rows="5">${esc(f.longDescription)}</textarea></label>
+      ${sceneFunctionEditorHtml(card, state, esc)}
       ${renderBeatPickerForScene(card)}
       ${renderMultiTagPicker(card, "characterIds", "Characters", "character")}
       ${renderMultiTagPicker(card, "locationIds",  "Locations",  "location")}
@@ -2344,6 +2360,10 @@ function renderSummaryBlock(card, field, label, isStale) {
 }
 
 function wireEditor(card) {
+  els.cardEditor.querySelectorAll("select[data-field]").forEach(sel => {
+    sel.addEventListener("change", () => saveField(card.id, sel));
+  });
+  els.cardEditor.querySelector(".fill-scene-function")?.addEventListener("click", () => fillSceneFunctions([card.id]));
   els.cardEditor.querySelectorAll("input[data-field], textarea[data-field]").forEach(input => {
     input.addEventListener("blur", () => saveField(card.id, input));
   });
@@ -2837,8 +2857,20 @@ function renderOutline() {
   els.outlineList.innerHTML = "";
   document.getElementById("beatSpine")?.remove();
   document.getElementById("outlineBoard")?.remove();
+  document.getElementById("structurePanel")?.remove();
 
   const columns = getColumnsForProject(state.project);
+
+  els.outlineList.parentNode.insertBefore(renderStructurePanel(state, {
+    esc,
+    open: structurePanelOpen(),
+    onToggle: (open) => { try { localStorage.setItem(STRUCTURE_PANEL_KEY, open ? "1" : "0"); } catch {} },
+    onAddBeat: (item) => addBeatPlaceholders([item]),
+    onAddAll: (items) => addBeatPlaceholders(items),
+    onOpenCard: (id) => openCardEditor(id),
+    onCheckAI: () => runStructureReview(),
+    aiResult: structureAiResult
+  }), els.outlineList);
 
   // Build a board container that holds all columns horizontally.
   const board = document.createElement("div");
@@ -2995,7 +3027,9 @@ function renderOutlineCard(card, col) {
       ${stale}
     </div>
     ${sub ? `<p class="outline-card-sub muted small">${esc(sub)}</p>` : ""}
+    ${card.type === "scene" ? sceneFunctionBadgesHtml(card, state, esc) : ""}
   `;
+  if (card.type === "scene" && card.fields?.valueShift === "flat") el.classList.add("sf-flat");
   el.addEventListener("click", e => {
     if (e.target.closest(".drag-handle")) return;
     openCardEditor(card.id);
@@ -3455,6 +3489,119 @@ async function reorderScenes(movingId, targetId, before) {
   if (audit.length) await logAudit(state.user.uid, projectId, audit, state.project);
   await touchProject();
   updateRefreshNudge();
+}
+
+// --- Planning: scene function + structure checklist ---
+
+const STRUCTURE_PANEL_KEY = "storybible.structurePanel.open";
+let structureAiResult = null; // last AI structure review (this session)
+
+function structurePanelOpen() {
+  // null = the writer hasn't chosen; the panel decides from its contents.
+  try { const v = localStorage.getItem(STRUCTURE_PANEL_KEY); return v === null ? null : v === "1"; } catch { return null; }
+}
+
+document.getElementById("analyzeScenesBtn")?.addEventListener("click", () => {
+  const todo = [...state.cards.values()].filter(c =>
+    c.type === "scene" && !c.archived &&
+    ((c.fields?.shortDescription || "").trim() || (c.fields?.longDescription || "").trim()) &&
+    (!c.fields?.valueShift || SCENE_FUNCTION_FIELDS.some(k => !(c.fields?.[k] || "").trim())));
+  if (!todo.length) {
+    alert("Every scene with a description already has its POV, goal, conflict, outcome and value shift filled in (scenes with no description are skipped).");
+    return;
+  }
+  if (!confirm(`Analyze ${todo.length} scene${todo.length === 1 ? "" : "s"}?\n\nThe LLM fills in only the empty fields — anything you've written stays as it is.`)) return;
+  fillSceneFunctions(todo.map(c => c.id));
+});
+
+async function fillSceneFunctions(sceneIds) {
+  if (!isConfigured()) {
+    if (confirm("No LLM provider configured. Open Settings?")) openSettingsModal();
+    return;
+  }
+  const scenes = sceneIds.map(id => state.cards.get(id)).filter(Boolean);
+  const { ok, result } = await runLLMAction(
+    scenes.length === 1 ? `Reading "${scenes[0].title}"` : `Analyzing ${scenes.length} scenes`,
+    (busy) => analyzeSceneFunctions(state, scenes, { signal: busy.signal })
+  );
+  if (!ok) return;
+  const audits = [];
+  let filled = 0;
+  for (const { sceneId, patch } of result || []) {
+    const card = state.cards.get(sceneId);
+    if (!card) continue;
+    const updates = { updatedAt: serverTimestamp() };
+    for (const [k, v] of Object.entries(patch)) updates[`fields.${k}`] = v;
+    try {
+      await updateDoc(doc(db, "users", state.user.uid, "projects", projectId, "cards", sceneId), updates);
+      card.fields = { ...(card.fields || {}), ...patch };
+      audits.push({ entityType: "card", entityId: sceneId, field: "sceneFunction", oldValue: null, newValue: patch });
+      filled++;
+    } catch (err) {
+      console.error("[scene-function] save failed", sceneId, err);
+    }
+  }
+  try { if (audits.length) await logAudit(state.user.uid, projectId, audits, state.project); } catch {}
+  await touchProject().catch(() => {});
+  refreshActiveView();
+  if (sceneIds.length === 1 && state.selectedCardId === sceneIds[0]) openCardEditor(sceneIds[0]);
+  if (sceneIds.length > 1) {
+    const flat = scenes.filter(s => s.fields?.valueShift === "flat").length;
+    alert(`Filled in ${filled} of ${scenes.length} scenes.${flat ? `\n\n${flat} scene${flat === 1 ? "" : "s"} marked "nothing changes" (● on the Outline) — worth a look.` : ""}`);
+  } else if (!filled) {
+    alert("Nothing to fill — either every field already has your text, or the scene description is too thin for the LLM to tell.");
+  }
+}
+
+// Create placeholder beat cards for missing structure beats, each at the end
+// of its expected column.
+async function addBeatPlaceholders(items) {
+  if (!items?.length) return;
+  const cardsCol = collection(db, "users", state.user.uid, "projects", projectId, "cards");
+  const nextOrder = {};
+  const audits = [];
+  for (const it of items) {
+    if (nextOrder[it.column] == null) {
+      nextOrder[it.column] = [...state.cards.values()]
+        .filter(c => !c.archived && (c.type === "scene" || c.type === "beat") && c.fields?.columnId === it.column)
+        .reduce((m, c) => Math.max(m, c.fields?.columnOrder ?? -1), -1) + 1;
+    }
+    const data = {
+      type: "beat", title: it.name, archived: false,
+      createdAt: serverTimestamp(), updatedAt: serverTimestamp(), order: 0,
+      fields: {
+        ...blankFieldsForType("beat"),
+        description: it.description,
+        structurePosition: it.name,
+        columnId: it.column,
+        columnOrder: nextOrder[it.column]++
+      }
+    };
+    try {
+      const ref = await addDoc(cardsCol, data);
+      state.cards.set(ref.id, { id: ref.id, ...data });
+      audits.push({ entityType: "card", entityId: ref.id, field: "created", oldValue: null, newValue: { type: "beat", title: it.name, source: "structure-checklist" } });
+    } catch (err) {
+      console.error("[structure] could not add beat", it.name, err);
+      alert(`Couldn't add "${it.name}": ${err?.message || err}`);
+      break;
+    }
+  }
+  try { if (audits.length) await logAudit(state.user.uid, projectId, audits, state.project); } catch {}
+  await touchProject().catch(() => {});
+  refreshActiveView();
+  updateRefreshNudge();
+}
+
+async function runStructureReview() {
+  if (!isConfigured()) {
+    if (confirm("No LLM provider configured. Open Settings?")) openSettingsModal();
+    return;
+  }
+  const { ok, result } = await runLLMAction("Checking your structure", (busy) => reviewStructure(state, { signal: busy.signal }));
+  if (!ok || !result) return;
+  structureAiResult = result;
+  if (!els.outlineView.classList.contains("hidden")) renderOutline();
 }
 
 // --- Archive ---

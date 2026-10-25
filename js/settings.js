@@ -1,5 +1,5 @@
 // Settings modal — open from any page. Persists LLM config to localStorage.
-import { getSettings, saveSettings, callLLM, isConfigured, GEMINI_MODELS, listGeminiModels, GEMINI_FALLBACK_CHAIN, getDailyUsage, GEMINI_DEFAULT_MODEL, GEMINI_MODEL_INFO, isGemmaModel, callLLMDetailed, isRetiredOrAliasModel, normalizeModelId } from "./llm.js?v=20261024";
+import { getSettings, saveSettings, callLLM, isConfigured, GEMINI_MODELS, listGeminiModels, GEMINI_FALLBACK_CHAIN, getDailyUsage, GEMINI_DEFAULT_MODEL, GEMINI_MODEL_INFO, isGemmaModel, callLLMDetailed, isRetiredOrAliasModel, normalizeModelId } from "./llm.js?v=20261025";
 
 const NOTICE_KEY = "storybible.llm.notice.acknowledged";
 const FIRST_VISIT_PROMPT_KEY = "storybible.llm.config-prompt.shown";

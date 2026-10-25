@@ -3,7 +3,7 @@
 // genre, premise, narrative structure, and the writer's established terms
 // (e.g. "Curtain Fall" is the giant stormcloud, not a curtain falling).
 
-import { db } from "./shared.js?v=20261024";
+import { db } from "./shared.js?v=20261025";
 import {
   doc, updateDoc, serverTimestamp, collection, getDocs, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";

@@ -1,8 +1,8 @@
 // LLM extraction flows: idea-dump extraction, side-panel note parsing,
 // approval modal (extraction vs. inference), and gap-analysis wizard.
 
-import { callLLMJson, isConfigured, wasTruncated } from "./llm.js?v=20261024";
-import { buildProjectContext } from "./story-settings.js?v=20261024";
+import { callLLMJson, isConfigured, wasTruncated } from "./llm.js?v=20261025";
+import { buildProjectContext } from "./story-settings.js?v=20261025";
 
 // State ref so extraction prompts can include project context.
 let STATE_REF = null;

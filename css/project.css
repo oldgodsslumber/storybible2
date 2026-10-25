@@ -1262,3 +1262,99 @@ body { display: flex; flex-direction: column; height: 100vh; }
   margin-bottom: 6px;
 }
 .archive-item .title { flex: 1; }
+
+/* ---- Planning: structure checklist (Outline) ---- */
+.structure-panel {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 0 0 16px;
+  padding: 0 14px;
+}
+.structure-panel > summary {
+  cursor: pointer;
+  padding: 10px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  list-style: none;
+}
+.structure-panel > summary::-webkit-details-marker { display: none; }
+.structure-panel > summary::before { content: "▸"; color: var(--muted); transition: transform 0.15s; }
+.structure-panel[open] > summary::before { transform: rotate(90deg); }
+.sp-count {
+  font-size: 12px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.sp-count.sp-complete { color: #4ec97a; border-color: rgba(78,201,122,0.5); }
+.sp-count.sp-incomplete { color: var(--warn); border-color: rgba(224,185,90,0.5); }
+.sp-body {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 20px;
+  padding: 4px 0 14px;
+}
+@media (max-width: 900px) { .sp-body { grid-template-columns: 1fr; } }
+.sp-beat-list { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.sp-beat {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--bg-elev-2);
+  border-left: 3px solid var(--border);
+}
+.sp-beat.sp-found { border-left-color: var(--beat); }
+.sp-beat.sp-missing { opacity: 0.85; }
+.sp-mark { width: 16px; color: var(--muted); }
+.sp-found .sp-mark { color: #4ec97a; }
+.sp-beat-main { flex: 1; min-width: 0; }
+.sp-beat .sp-add { flex: 0 0 auto; }
+.sp-warn { color: var(--warn); font-size: 12px; }
+.sp-side h4 { margin: 0 0 8px; font-size: 13px; }
+.sp-pacing { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.sp-pacing li { display: grid; grid-template-columns: 110px 1fr auto auto; gap: 8px; align-items: center; font-size: 12px; }
+.sp-pace-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-bar { position: relative; height: 8px; background: var(--bg-elev-2); border-radius: 4px; }
+.sp-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--scene); border-radius: 4px; }
+.sp-flag .sp-bar-fill { background: var(--warn); }
+.sp-bar-guide { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); opacity: 0.55; }
+.sp-pace-num { color: var(--muted); white-space: nowrap; }
+.sp-ai-out { margin-top: 10px; font-size: 13px; }
+.sp-ai-out h5 { margin: 10px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.sp-ai-out ul { margin: 0; padding-left: 18px; }
+.sp-ai-out li { margin-bottom: 6px; }
+.sp-ai-overall { margin: 0 0 6px; }
+
+/* ---- Planning: scene function ---- */
+.scene-function {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 10px;
+  margin: 8px 0;
+}
+.scene-function > summary { cursor: pointer; padding: 8px 0; font-weight: 600; font-size: 13px; }
+.scene-function[open] { padding-bottom: 10px; }
+.scene-function .fill-scene-function { margin-top: 6px; }
+.sf-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.sf-chip {
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.sf-shift.sf-up { color: #4ec97a; }
+.sf-shift.sf-down { color: var(--danger); }
+.sf-shift.sf-mixed { color: var(--accent); }
+.sf-shift.sf-flat { color: var(--warn); border-color: rgba(224,185,90,0.5); }
+.outline-card.sf-flat { border-left-color: var(--warn); }
+.outline-header #analyzeScenesBtn { margin-top: 4px; }
+.wiki-sf { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; }
+.wiki-sf dt { color: var(--muted); font-size: 13px; }
+.wiki-sf dd { margin: 0; }

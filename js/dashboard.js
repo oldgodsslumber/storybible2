@@ -1,7 +1,7 @@
 import {
   auth, db, signIn, onAuthChange, renderUserArea, show, hide, formatDate
-} from "./shared.js?v=20261024";
-import { mountLlmConfigBanner } from "./settings.js?v=20261024";
+} from "./shared.js?v=20261025";
+import { mountLlmConfigBanner } from "./settings.js?v=20261025";
 import {
   collection, doc, getDocs, addDoc, query, where, orderBy, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";

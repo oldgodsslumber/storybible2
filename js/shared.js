@@ -7,7 +7,7 @@ import {
   signOut
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { firebaseConfig } from "../firebase-config.js?v=20261024";
+import { firebaseConfig } from "../firebase-config.js?v=20261025";
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
@@ -110,7 +110,12 @@ export function blankFieldsForType(type) {
     case "character":
       return { role: "", physicalDescription: "", age: "", history: [], traits: [], storyRoleSummary: null, storyRoleSummaryStale: false };
     case "scene":
-      return { shortDescription: "", longDescription: "", ragSummary: null, ragSummaryStale: false, characterIds: [], locationIds: [], arcIds: [], kanbanStage: "idea", columnId: "", columnOrder: 0 };
+      return {
+        shortDescription: "", longDescription: "", ragSummary: null, ragSummaryStale: false,
+        characterIds: [], locationIds: [], arcIds: [], kanbanStage: "idea", columnId: "", columnOrder: 0,
+        // What the scene does (see planning.js): filled by hand or by the LLM.
+        povCharacterId: "", goal: "", conflict: "", outcome: "", change: "", valueShift: ""
+      };
     case "theme":
       return { description: "" };
     case "concept":
