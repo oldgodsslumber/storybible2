@@ -19,11 +19,11 @@ import {
   reviewCharacterArc, persistCharacterArcReview
 } from "./review.js?v=20261025";
 import { renderOracle } from "./oracle.js?v=20261025";
-import { openStorySettingsModal, getColumnsForProject, defaultColumnId, resolveColumnHint, sortScenesByOutline } from "./story-settings.js?v=20261025";
+import { openStorySettingsModal, getColumnsForProject, defaultColumnId, resolveColumnHint, sortScenesByOutline, STRUCTURE_OPTIONS } from "./story-settings.js?v=20261025";
 import { provideExtractionStateRef } from "./extraction.js?v=20261025";
 import {
   sceneFunctionEditorHtml, sceneFunctionBadgesHtml, analyzeSceneFunctions, hasSceneFunction,
-  SCENE_FUNCTION_FIELDS, valueShiftInfo, renderStructurePanel, reviewStructure
+  SCENE_FUNCTION_FIELDS, valueShiftInfo, renderStructurePanel, reviewStructure, structureStatus
 } from "./planning.js?v=20261025";
 import { mountLlmConfigBanner } from "./settings.js?v=20261025";
 
@@ -1672,6 +1672,7 @@ function makeKanbanCard(scene) {
   div.innerHTML = `
     <h4>${esc(scene.title)} ${stale}</h4>
     <p class="muted small">${esc(scene.fields?.shortDescription || scene.fields?.ragSummary || "")}</p>
+    ${sceneFunctionBadgesHtml(scene, state, esc)}
   `;
   div.addEventListener("dragstart", e => {
     e.dataTransfer.setData("text/plain", scene.id);
@@ -2363,7 +2364,10 @@ function wireEditor(card) {
   els.cardEditor.querySelectorAll("select[data-field]").forEach(sel => {
     sel.addEventListener("change", () => saveField(card.id, sel));
   });
-  els.cardEditor.querySelector(".fill-scene-function")?.addEventListener("click", () => fillSceneFunctions([card.id]));
+  els.cardEditor.querySelector(".fill-scene-function")?.addEventListener("click", (e) => {
+    e.preventDefault(); // it sits in the <summary>; don't toggle the block
+    fillSceneFunctions([card.id], { single: true });
+  });
   els.cardEditor.querySelectorAll("input[data-field], textarea[data-field]").forEach(input => {
     input.addEventListener("blur", () => saveField(card.id, input));
   });
@@ -2501,9 +2505,27 @@ async function handleSuggestTraits(cardId) {
   });
 }
 
+// The value an editor input was rendered with (or last saved as). An input
+// still showing it hasn't been touched — its blur must not write, or a stale
+// editor would save old blanks over newer data (e.g. an AI fill).
+function renderedValue(input) {
+  if (input.tagName === "SELECT") {
+    return [...input.options].find(o => o.defaultSelected)?.value ?? input.options[0]?.value ?? "";
+  }
+  return input.defaultValue;
+}
+function markRendered(input) {
+  if (input.tagName === "SELECT") {
+    [...input.options].forEach(o => { o.defaultSelected = o.value === input.value; });
+  } else {
+    input.defaultValue = input.value;
+  }
+}
+
 async function saveField(cardId, input) {
   const card = state.cards.get(cardId);
   if (!card) return;
+  if (input.value === renderedValue(input)) return; // untouched
   const fieldName = input.dataset.field;
   const isList = input.dataset.list === "1";
   const isTop = input.dataset.top === "1";
@@ -2557,9 +2579,22 @@ async function saveField(cardId, input) {
     updates[`fields.${staleFlag}`] = false;
   }
 
+  if (card.type === "beat" && card.fields?.placeholder) {
+    card.fields.placeholder = false;
+    updates["fields.placeholder"] = false;
+  }
+  // Editing an AI-written field makes it the writer's own.
+  if (Array.isArray(card.fields?.aiFilled) && card.fields.aiFilled.includes(fieldName)) {
+    const aiFilled = card.fields.aiFilled.filter(k => k !== fieldName);
+    card.fields.aiFilled = aiFilled;
+    updates["fields.aiFilled"] = aiFilled;
+    input.closest("label")?.querySelector(".sf-ai")?.remove();
+  }
+
   const ref = doc(db, "users", state.user.uid, "projects", projectId, "cards", cardId);
   try {
     await updateDoc(ref, updates);
+    markRendered(input);
   } catch (err) {
     console.error("[save-field] failed", { cardId, fieldName, err });
     alert(`Couldn't save "${fieldName}": ${err?.message || err}`);
@@ -2645,7 +2680,7 @@ async function mergeCards(sourceId, targetId) {
   const tgtFields = target.fields = target.fields || {};
   const srcFields = source.fields || {};
   const audits = [];
-  const stringFields = ["role", "physicalDescription", "description", "summary", "shortDescription", "longDescription", "structurePosition", "storyRoleSummary", "ragSummary"];
+  const stringFields = ["goal", "conflict", "outcome", "change", "role", "physicalDescription", "description", "summary", "shortDescription", "longDescription", "structurePosition", "storyRoleSummary", "ragSummary"];
   const arrayFields = ["history", "traits", "characterIds", "locationIds", "arcIds", "relatedSceneIds", "relatedArcIds"];
 
   const updates = {};
@@ -2662,7 +2697,7 @@ async function mergeCards(sourceId, targetId) {
     }
   }
   // Single values: keep the target's, fill only if it has none.
-  for (const f of ["age"]) {
+  for (const f of ["age", "valueShift", "povCharacterId"]) {
     const src = String(srcFields[f] ?? "").trim();
     if (src && !String(tgtFields[f] ?? "").trim()) { tgtFields[f] = src; updates[`fields.${f}`] = src; }
   }
@@ -2746,6 +2781,16 @@ async function mergeCards(sourceId, targetId) {
     patch.updatedAt = serverTimestamp();
     await updateDoc(doc(db, "users", state.user.uid, "projects", projectId, "cards", other.id), patch);
     audits.push({ entityType: "card", entityId: other.id, field: "tags-retargeted-during-merge", oldValue: sourceId, newValue: targetId });
+  }
+
+  // Scenes narrated by a merged character now belong to the surviving one.
+  if (source.type === "character") {
+    for (const sc of state.cards.values()) {
+      if (sc.type !== "scene" || sc.fields?.povCharacterId !== sourceId) continue;
+      sc.fields.povCharacterId = targetId;
+      await updateDoc(doc(db, "users", state.user.uid, "projects", projectId, "cards", sc.id), { "fields.povCharacterId": targetId, updatedAt: serverTimestamp() });
+      audits.push({ entityType: "card", entityId: sc.id, field: "povCharacterId", oldValue: sourceId, newValue: targetId });
+    }
   }
 
   // Archive the source card (don't hard-delete — preserves history and audit)
@@ -2861,16 +2906,27 @@ function renderOutline() {
 
   const columns = getColumnsForProject(state.project);
 
-  els.outlineList.parentNode.insertBefore(renderStructurePanel(state, {
+  const structurePanel = renderStructurePanel(state, {
     esc,
     open: structurePanelOpen(),
-    onToggle: (open) => { try { localStorage.setItem(STRUCTURE_PANEL_KEY, open ? "1" : "0"); } catch {} },
+    busy: addingBeats,
+    onToggle: (open) => {
+      structurePanelSessionOpen = open;
+      try { localStorage.setItem(STRUCTURE_PANEL_KEY + projectId, open ? "1" : "0"); } catch {}
+    },
     onAddBeat: (item) => addBeatPlaceholders([item]),
     onAddAll: (items) => addBeatPlaceholders(items),
+    onArchiveStray: (cards) => archiveStrayPlaceholders(cards),
     onOpenCard: (id) => openCardEditor(id),
     onCheckAI: () => runStructureReview(),
-    aiResult: structureAiResult
-  }), els.outlineList);
+    onDismissAI: () => { structureAiResult = null; renderOutline(); },
+    structureLabel: (id) => STRUCTURE_OPTIONS.find(o => o.id === id)?.label?.replace(/\s*\(.*\)$/, "") || id,
+    aiResult: structureAiResult && { ...structureAiResult, changedSince: (state.project.auditTrail || []).length !== structureAiResult.auditLen }
+  });
+  // Within a session the panel keeps whatever state it first showed, so it
+  // never snaps shut under the cursor when the last beat gets added.
+  if (structurePanelSessionOpen === null) structurePanelSessionOpen = structurePanel.open;
+  els.outlineList.parentNode.insertBefore(structurePanel, els.outlineList);
 
   // Build a board container that holds all columns horizontally.
   const board = document.createElement("div");
@@ -3493,73 +3549,151 @@ async function reorderScenes(movingId, targetId, before) {
 
 // --- Planning: scene function + structure checklist ---
 
-const STRUCTURE_PANEL_KEY = "storybible.structurePanel.open";
-let structureAiResult = null; // last AI structure review (this session)
+// Open/closed is remembered per project once the writer clicks it.
+const STRUCTURE_PANEL_KEY = "storybible.structurePanel.open.";
+let structureAiResult = null;          // last AI structure review (this session)
+let structurePanelSessionOpen = null;  // state the panel settled on this session
+let addingBeats = false;               // placeholder creation in flight
 
 function structurePanelOpen() {
-  // null = the writer hasn't chosen; the panel decides from its contents.
-  try { const v = localStorage.getItem(STRUCTURE_PANEL_KEY); return v === null ? null : v === "1"; } catch { return null; }
+  if (structurePanelSessionOpen !== null) return structurePanelSessionOpen;
+  try {
+    const v = localStorage.getItem(STRUCTURE_PANEL_KEY + projectId);
+    if (v !== null) return v === "1";
+  } catch {}
+  // Unset: on a phone the board matters more — start collapsed. Otherwise
+  // the panel decides from its contents (null).
+  return isMobileViewport() ? false : null;
 }
 
 document.getElementById("analyzeScenesBtn")?.addEventListener("click", () => {
   const todo = [...state.cards.values()].filter(c =>
     c.type === "scene" && !c.archived &&
     ((c.fields?.shortDescription || "").trim() || (c.fields?.longDescription || "").trim()) &&
-    (!c.fields?.valueShift || SCENE_FUNCTION_FIELDS.some(k => !(c.fields?.[k] || "").trim())));
+    (!c.fields?.valueShift || !c.fields?.povCharacterId || SCENE_FUNCTION_FIELDS.some(k => !(c.fields?.[k] || "").trim())));
   if (!todo.length) {
-    alert("Every scene with a description already has its POV, goal, conflict, outcome and value shift filled in (scenes with no description are skipped).");
+    alert("Every scene with a description already has its POV, goal, conflict, outcome, what changes and value shift filled in (scenes with no description are skipped).");
     return;
   }
   if (!confirm(`Analyze ${todo.length} scene${todo.length === 1 ? "" : "s"}?\n\nThe LLM fills in only the empty fields — anything you've written stays as it is.`)) return;
   fillSceneFunctions(todo.map(c => c.id));
 });
 
-async function fillSceneFunctions(sceneIds) {
+async function fillSceneFunctions(sceneIds, { single = false } = {}) {
   if (!isConfigured()) {
     if (confirm("No LLM provider configured. Open Settings?")) openSettingsModal();
     return;
   }
   const scenes = sceneIds.map(id => state.cards.get(id)).filter(Boolean);
-  const { ok, result } = await runLLMAction(
-    scenes.length === 1 ? `Reading "${scenes[0].title}"` : `Analyzing ${scenes.length} scenes`,
-    (busy) => analyzeSceneFunctions(state, scenes, { signal: busy.signal })
-  );
-  if (!ok) return;
-  const audits = [];
-  let filled = 0;
-  for (const { sceneId, patch } of result || []) {
-    const card = state.cards.get(sceneId);
-    if (!card) continue;
-    const updates = { updatedAt: serverTimestamp() };
-    for (const [k, v] of Object.entries(patch)) updates[`fields.${k}`] = v;
-    try {
-      await updateDoc(doc(db, "users", state.user.uid, "projects", projectId, "cards", sceneId), updates);
-      card.fields = { ...(card.fields || {}), ...patch };
-      audits.push({ entityType: "card", entityId: sceneId, field: "sceneFunction", oldValue: null, newValue: patch });
-      filled++;
-    } catch (err) {
-      console.error("[scene-function] save failed", sceneId, err);
+  if (!scenes.length) return;
+  if (single) {
+    const f = scenes[0].fields || {};
+    if (!(f.shortDescription || "").trim() && !(f.longDescription || "").trim()) {
+      alert("Add a short or long description first — the AI works out these fields from what the scene says happens.");
+      return;
+    }
+    if (f.povCharacterId && f.valueShift && SCENE_FUNCTION_FIELDS.every(k => (f[k] || "").trim())) {
+      alert("Every field already has text. Clear one if you'd like the AI to suggest it.");
+      return;
     }
   }
+
+  const saved = new Set();
+  const audits = [];
+  let failedSaves = 0;
+  // Write one batch's answers. Re-checks each field against the card NOW:
+  // the writer may have typed into it while the AI was working.
+  const applyBatch = async (results) => {
+    for (const { sceneId, patch } of results) {
+      const card = state.cards.get(sceneId);
+      if (!card || card.archived) continue;
+      const f = card.fields || {};
+      const live = {};
+      for (const [k, v] of Object.entries(patch)) {
+        const cur = f[k];
+        if (cur === undefined || cur === null || (typeof cur === "string" && !cur.trim())) live[k] = v;
+      }
+      if (!Object.keys(live).length) continue;
+      const aiFilled = [...new Set([...(Array.isArray(f.aiFilled) ? f.aiFilled : []), ...Object.keys(live)])];
+      const updates = { updatedAt: serverTimestamp(), "fields.aiFilled": aiFilled };
+      for (const [k, v] of Object.entries(live)) updates[`fields.${k}`] = v;
+      try {
+        await updateDoc(doc(db, "users", state.user.uid, "projects", projectId, "cards", sceneId), updates);
+        card.fields = { ...f, ...live, aiFilled };
+        saved.add(sceneId);
+        audits.push({ entityType: "card", entityId: sceneId, field: "sceneFunction", oldValue: null, newValue: live });
+        updateOpenEditorFields(sceneId, live);
+      } catch (err) {
+        failedSaves++;
+        console.error("[scene-function] save failed", sceneId, err);
+      }
+    }
+  };
+
+  const label = single ? `Reading "${scenes[0].title}"` : `Analyzing ${scenes.length} scenes`;
+  const { ok, result, cancelled } = await runLLMAction(label, (busy) => analyzeSceneFunctions(state, scenes, {
+    signal: busy.signal,
+    onBatch: async (results, { batch, batches }) => {
+      await applyBatch(results);
+      if (batches > 1 && batch < batches) busy.update(`${label} — ${batch} of ${batches} batches done`);
+    }
+  }));
+
   try { if (audits.length) await logAudit(state.user.uid, projectId, audits, state.project); } catch {}
-  await touchProject().catch(() => {});
+  if (saved.size) await touchProject().catch(() => {});
   refreshActiveView();
-  if (sceneIds.length === 1 && state.selectedCardId === sceneIds[0]) openCardEditor(sceneIds[0]);
-  if (sceneIds.length > 1) {
-    const flat = scenes.filter(s => s.fields?.valueShift === "flat").length;
-    alert(`Filled in ${filled} of ${scenes.length} scenes.${flat ? `\n\n${flat} scene${flat === 1 ? "" : "s"} marked "nothing changes" (● on the Outline) — worth a look.` : ""}`);
-  } else if (!filled) {
-    alert("Nothing to fill — either every field already has your text, or the scene description is too thin for the LLM to tell.");
+
+  const names = (list) => list.slice(0, 6).map(c => `"${c.title}"`).join(", ") + (list.length > 6 ? ` and ${list.length - 6} more` : "");
+  if (!ok) {
+    // runLLMAction already reported the error (or the cancel).
+    if (saved.size) alert(`${cancelled ? "Stopped" : "Stopped on an error"} — ${saved.size} scene${saved.size === 1 ? " was" : "s were"} already filled in and kept. Run it again to finish the rest.`);
+    return;
   }
+  if (single) {
+    if (!saved.size) alert("The AI couldn't tell anything new from this scene's description — try adding a sentence or two about what happens.");
+    return;
+  }
+  const lines = [`Filled in ${saved.size} of ${scenes.length} scenes.`];
+  const notAnswered = scenes.filter(s => !saved.has(s.id));
+  if (result?.failedBatches) lines.push(`${result.failedBatches} batch${result.failedBatches === 1 ? "" : "es"} failed — run Analyze again to retry those scenes.`);
+  if (failedSaves) lines.push(`${failedSaves} scene${failedSaves === 1 ? "" : "s"} couldn't be saved (see the console).`);
+  if (notAnswered.length && !result?.failedBatches) lines.push(`No new detail for ${names(notAnswered)} — their descriptions may be too thin.`);
+  const flat = scenes.filter(s => s.fields?.valueShift === "flat");
+  if (flat.length) lines.push(`"Nothing changes" (● on the Outline): ${names(flat)} — worth a look.`);
+  alert(lines.join("\n\n"));
+}
+
+// Show fresh AI values in an open editor without re-rendering it (a re-render
+// would blur the field the writer is in). Only untouched inputs are updated.
+function updateOpenEditorFields(cardId, patch) {
+  if (state.selectedCardId !== cardId || els.cardEditor.classList.contains("hidden")) return;
+  for (const [k, v] of Object.entries(patch)) {
+    const input = els.cardEditor.querySelector(`[data-field="${k}"]`);
+    if (!input || input.value !== renderedValue(input)) continue; // writer is editing it
+    input.value = v;
+    markRendered(input);
+    const lbl = input.closest("label");
+    if (lbl && !lbl.querySelector(".sf-ai")) {
+      lbl.firstChild?.after?.(Object.assign(document.createElement("span"), { className: "sf-ai", title: "Written by the AI — edit it to make it yours", textContent: " ✨" }));
+    }
+  }
+  els.cardEditor.querySelector(".scene-function")?.setAttribute("open", "");
 }
 
 // Create placeholder beat cards for missing structure beats, each at the end
 // of its expected column.
 async function addBeatPlaceholders(items) {
-  if (!items?.length) return;
+  if (!items?.length || addingBeats) return; // a double click must not add twice
+  // Only beats that are still missing — another click may have added some.
+  const stillMissing = new Set(structureStatus(state).items.filter(i => !i.card).map(i => i.name));
+  items = items.filter(it => stillMissing.has(it.name));
+  if (!items.length) return;
+  addingBeats = true;
+  if (!els.outlineView.classList.contains("hidden")) renderOutline(); // buttons disabled
   const cardsCol = collection(db, "users", state.user.uid, "projects", projectId, "cards");
   const nextOrder = {};
   const audits = [];
+  try {
   for (const it of items) {
     if (nextOrder[it.column] == null) {
       nextOrder[it.column] = [...state.cards.values()]
@@ -3574,7 +3708,11 @@ async function addBeatPlaceholders(items) {
         description: it.description,
         structurePosition: it.name,
         columnId: it.column,
-        columnOrder: nextOrder[it.column]++
+        columnOrder: nextOrder[it.column]++,
+        // A scene that already looks like this beat gets linked to it.
+        relatedSceneIds: it.sceneHint ? [it.sceneHint.id] : [],
+        // Counts as a placeholder (◌) until the writer edits the card.
+        placeholder: true
       }
     };
     try {
@@ -3587,10 +3725,32 @@ async function addBeatPlaceholders(items) {
       break;
     }
   }
+  } finally {
+    addingBeats = false;
+  }
   try { if (audits.length) await logAudit(state.user.uid, projectId, audits, state.project); } catch {}
   await touchProject().catch(() => {});
   refreshActiveView();
   updateRefreshNudge();
+}
+
+// Archive untouched placeholder beats left over from a previous structure.
+async function archiveStrayPlaceholders(cards) {
+  if (!cards?.length) return;
+  if (!confirm(`Archive ${cards.length} untouched placeholder beat${cards.length === 1 ? "" : "s"}? They're restorable from the Archive tab.`)) return;
+  const audits = [];
+  for (const c of cards) {
+    try {
+      await updateDoc(doc(db, "users", state.user.uid, "projects", projectId, "cards", c.id), { archived: true, updatedAt: serverTimestamp() });
+      c.archived = true;
+      audits.push({ entityType: "card", entityId: c.id, field: "archived", oldValue: false, newValue: true });
+    } catch (err) {
+      console.error("[structure] archive placeholder failed", c.id, err);
+    }
+  }
+  try { if (audits.length) await logAudit(state.user.uid, projectId, audits, state.project); } catch {}
+  await touchProject().catch(() => {});
+  refreshActiveView();
 }
 
 async function runStructureReview() {
@@ -3600,7 +3760,9 @@ async function runStructureReview() {
   }
   const { ok, result } = await runLLMAction("Checking your structure", (busy) => reviewStructure(state, { signal: busy.signal }));
   if (!ok || !result) return;
-  structureAiResult = result;
+  // Remember the outline's change count, so the panel can say when the
+  // review no longer reflects the cards.
+  structureAiResult = { ...result, auditLen: (state.project.auditTrail || []).length };
   if (!els.outlineView.classList.contains("hidden")) renderOutline();
 }
 

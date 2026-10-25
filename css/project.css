@@ -1358,3 +1358,13 @@ body { display: flex; flex-direction: column; height: 100vh; }
 .wiki-sf { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; }
 .wiki-sf dt { color: var(--muted); font-size: 13px; }
 .wiki-sf dd { margin: 0; }
+.sf-ai { font-size: 11px; cursor: help; }
+.sf-chip.sf-gone { color: var(--warn); border-color: rgba(224,185,90,0.5); }
+.scene-function > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.scene-function > summary .fill-scene-function { font-weight: normal; }
+.sp-beat.sp-placeholder { border-left: 3px dashed var(--beat); }
+.sp-placeholder .sp-mark { color: var(--beat); }
+.sp-hint { margin-top: 2px; color: var(--accent); }
+.sp-stray { margin: 8px 0 0; color: var(--muted); }
+.sp-ai-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.sp-beats button[disabled], .sp-side button[disabled] { opacity: 0.5; cursor: progress; }

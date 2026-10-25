@@ -239,7 +239,9 @@ export function getStorySettings(project) {
 // Build the PROJECT CONTEXT block that gets prepended to every LLM system
 // prompt. Returns "" if nothing useful has been set, so prompts don't get
 // polluted with empty stanzas.
-export function buildProjectContext(project) {
+// opts.columns = false leaves out the Outline-column list (only prompts
+// that propose scenes/beats need it).
+export function buildProjectContext(project, opts = {}) {
   const s = getStorySettings(project);
   const lines = [];
   if (s.genre || s.premise || s.structure || s.voiceNotes || s.anchorConcepts.length) {
@@ -269,7 +271,7 @@ export function buildProjectContext(project) {
     }
     // Outline columns — so the LLM knows where scenes/beats can be placed
     // and can return a columnHint that the app can honor when creating cards.
-    const cols = getColumnsForProject(project);
+    const cols = opts.columns === false ? [] : getColumnsForProject(project);
     if (cols.length) {
       lines.push("Outline columns — when proposing a scene or beat, set its `columnHint` to one of these column IDs:");
       for (const c of cols) {

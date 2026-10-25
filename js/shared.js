@@ -84,6 +84,11 @@ export function openBusyOverlay(label) {
   // textContent, never innerHTML: labels carry card titles, which can come
   // straight from LLM output.
   overlay.querySelector(".busy-label").textContent = label || "Working…";
+  // Everything behind the overlay goes inert so Tab can't reach (and edit)
+  // fields while the work runs. Blurring first lets an edit in progress save.
+  document.activeElement?.blur?.();
+  const inerted = [...document.body.children].filter(el => !el.inert);
+  inerted.forEach(el => { el.inert = true; });
   document.body.appendChild(overlay);
   const controller = new AbortController();
   const labelEl = overlay.querySelector(".busy-label");
@@ -91,6 +96,7 @@ export function openBusyOverlay(label) {
   const close = () => {
     if (closed) return;
     closed = true;
+    inerted.forEach(el => { el.inert = false; });
     overlay.remove();
   };
   overlay.querySelector(".busy-cancel").addEventListener("click", () => {

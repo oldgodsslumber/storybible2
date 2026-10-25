@@ -249,7 +249,9 @@ function themeList(state) {
     .map(c => ({ name: c.title, description: c.fields?.description || "" }));
 }
 function scenesFeaturingByName(state, charTitle) {
+  const charId = [...state.cards.values()].find(c => c.type === "character" && c.title === charTitle)?.id;
   return sceneList(state).filter(s => {
+    if (charId && s.fields?.povCharacterId === charId) return true;
     const ids = s.fields?.characterIds || [];
     if (ids.length) {
       // characterIds may store names or ids — handle both
@@ -272,14 +274,22 @@ function pickCharacter(c) {
     storyRoleSummary: f.storyRoleSummary || null
   };
 }
+// Scene-function fields that are actually filled (empty keys just bloat prompts).
+function sceneFunctionFor(s, state) {
+  const f = s.fields || {};
+  const out = {};
+  const pov = f.povCharacterId ? state?.cards?.get(f.povCharacterId) : null;
+  if (pov && !pov.archived) out.pov = pov.title;
+  for (const k of ["goal", "conflict", "outcome", "change", "valueShift"]) if (f[k]) out[k] = f[k];
+  return out;
+}
+
 function pickScene(s, state) {
   const f = s.fields || {};
   return {
     title: s.title,
     column: s.fields?.columnId || "",
-    pov: s.fields?.povCharacterId ? (state?.cards?.get(s.fields.povCharacterId)?.title || "") : "",
-    goal: f.goal || "", conflict: f.conflict || "", outcome: f.outcome || "",
-    change: f.change || "", valueShift: f.valueShift || "",
+    ...sceneFunctionFor(s, state),
     shortDescription: f.shortDescription || "",
     ragSummary: f.ragSummary || "",
     characterIds: f.characterIds || [],
