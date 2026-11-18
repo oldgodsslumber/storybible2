@@ -5,16 +5,17 @@
 // arc.summary). If summaries are missing, the prompt instructs the model to
 // use raw content as a fallback.
 
-import { db } from "./shared.js?v=20261025";
+import { db } from "./shared.js?v=20261118";
 import {
   doc, updateDoc, addDoc, collection, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { callLLM, parseJsonLoose, isConfigured, callLLMJson } from "./llm.js?v=20261025";
-import { openSettingsModal } from "./settings.js?v=20261025";
-import { logAudit } from "./audit.js?v=20261025";
-import { openBusyOverlay } from "./shared.js?v=20261025";
-import { buildProjectContext, sortScenesByOutline, getColumnsForProject, defaultColumnId, resolveColumnHint } from "./story-settings.js?v=20261025";
-import { blankFieldsForType } from "./shared.js?v=20261025";
+import { callLLM, parseJsonLoose, isConfigured, callLLMJson } from "./llm.js?v=20261118";
+import { openSettingsModal } from "./settings.js?v=20261118";
+import { logAudit } from "./audit.js?v=20261118";
+import { openBusyOverlay } from "./shared.js?v=20261118";
+import { buildProjectContext, sortScenesByOutline, getColumnsForProject, defaultColumnId, resolveColumnHint } from "./story-settings.js?v=20261118";
+import { blankFieldsForType } from "./shared.js?v=20261118";
+import { getMediumProfile, mediumScenePayload } from "./medium.js?v=20261118";
 
 function ctx(state) { return buildProjectContext(state?.project); }
 
@@ -76,7 +77,7 @@ Return ONLY this JSON shape:
 }`;
 
 const SYNOPSIS_SYSTEM = `You are an assistant for a story bible app. Write a 3–5 paragraph story synopsis based on the project's scenes, characters, and themes. Plain prose. Faithfully reflect what is on the cards — do NOT invent events. If the story is fragmentary, say so honestly in the synopsis.
-
+{{MEDIUM_NOTE}}
 Return ONLY this JSON:
 { "synopsis": "paragraph text...\\n\\nparagraph text..." }`;
 
@@ -160,7 +161,9 @@ export async function generateSynopsis(state, { signal } = {}) {
     characters: characterList(state).map(pickCharacter),
     scenesInOrder: sceneList(state).map(s => pickScene(s, state))
   };
-  return callJson(ctx(state) + SYNOPSIS_SYSTEM, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`, signal);
+  const note = getMediumProfile(state.project)?.synopsisNote;
+  const system = SYNOPSIS_SYSTEM.replace("{{MEDIUM_NOTE}}", note ? `\n${note} Still never invent events that aren't on the cards.\n` : "");
+  return callJson(ctx(state) + system, `Context:\n${JSON.stringify(payload, null, 2)}\n\nReturn the JSON.`, signal);
 }
 
 export async function themeCoherence(state, { signal } = {}) {
@@ -289,6 +292,7 @@ function pickScene(s, state) {
   return {
     title: s.title,
     column: s.fields?.columnId || "",
+    ...mediumScenePayload(s, state),
     ...sceneFunctionFor(s, state),
     shortDescription: f.shortDescription || "",
     ragSummary: f.ragSummary || "",
@@ -513,7 +517,10 @@ export function renderReviewPanel(container, state, projectId, { onChanged }) {
   const setBlurb = (mode) => {
     const blurbs = {
       character: "Pick a character. The model writes 2–4 paragraphs on their trajectory across the whole story: starting point, turning points, where they end up.",
-      synopsis:  "A 3–5 paragraph story-level synopsis built from your themes, characters, and ordered scenes. Good for sanity-checking that the story communicates what you intend.",
+      synopsis:  ({
+        novel: "A one-page submission synopsis (the kind agents ask for), ending included, built from your themes, characters, and ordered scenes.",
+        film:  "A logline plus a present-tense treatment, ending included, built from your themes, characters, and ordered scenes."
+      })[getMediumProfile(state.project)?.id] || "A 3–5 paragraph story-level synopsis built from your themes, characters, and ordered scenes. Good for sanity-checking that the story communicates what you intend.",
       arcs:      "Each Arc card here represents a subplot or throughline. Edit its summary and save to ask the model which scenes now feel in tension with that arc.",
       theme:     "Which scenes and characters support each theme pillar, and which feel disconnected. Surfaces drift early."
     };

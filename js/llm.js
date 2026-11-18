@@ -11,6 +11,9 @@ const DEFAULTS = {
   provider: "none",
   geminiApiKey: "",
   geminiModel: GEMINI_DEFAULT_MODEL,
+  // "auto" = cheapest level for JSON extraction, model default for prose.
+  // "low" | "medium" | "high" = that thinkingLevel on every call (3.x+ only).
+  geminiThinking: "auto",
   oobaBaseUrl: "http://127.0.0.1:5000",
   oobaModel: "local-model",
   temperature: 0.3 // Gemma + local models only — Gemini no longer takes one
@@ -100,6 +103,11 @@ export function normalizeModelId(id) {
 
 export function isGemmaModel(id) { return /^gemma/i.test(String(id || "")); }
 
+// Gemini 3 and later take thinkingLevel; 2.5 uses thinkingBudget and Gemma
+// takes neither. low / medium / high are accepted by every 3.x and 4 model.
+export function usesThinkingLevel(id) { return /^gemini-([3-9]|\d{2,})/i.test(String(id || "")); }
+export const THINKING_LEVELS = ["low", "medium", "high"];
+
 // --- Per-model daily usage tracking ---
 // Google resets requests-per-day at midnight PACIFIC time, so "today" is the
 // Pacific date, not the local one. Stored as
@@ -186,6 +194,7 @@ export function getSettings() {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return { ...DEFAULTS };
     const merged = { ...DEFAULTS, ...JSON.parse(raw) };
+    if (merged.geminiThinking !== "auto" && !THINKING_LEVELS.includes(merged.geminiThinking)) merged.geminiThinking = "auto";
     const model = normalizeModelId(merged.geminiModel);
     merged.geminiModel = (!model || isRetiredOrAliasModel(model)) ? DEFAULTS.geminiModel : model;
     return merged;
@@ -334,7 +343,7 @@ function buildGeminiErrorMessage(status, errText, model) {
     return `Gemini ${status} — API key not valid. Re-copy it from https://aistudio.google.com/apikey.`;
   }
   if (status === 400 && /thinking/i.test(msg)) {
-    return `Gemini ${status} — ${model} rejected the thinking setting this app sent. Google may have changed which levels it accepts; pick a different model in Settings and let us know.\n\nGoogle's message: ${msg.slice(0, 300)}`;
+    return `Gemini ${status} — ${model} rejected the thinking setting this app sent. Google may have changed which levels it accepts; set Thinking to Auto or pick a different model in Settings.\n\nGoogle's message: ${msg.slice(0, 300)}`;
   }
   if (status === 403) {
     return [
@@ -408,7 +417,7 @@ function buildEmptyResponseMessage(json, modelId) {
   switch (reason) {
     case "MAX_TOKENS":
     case "CONTINUATION":
-      return `${labelForModel(modelId)} ran out of output budget before writing an answer — its hidden "thinking" counts against the same budget. Shrink the idea-dump or note, or switch to ${labelForModel("gemini-3.5-flash-lite")} in Settings.`;
+      return `${labelForModel(modelId)} ran out of output budget before writing an answer — its hidden "thinking" counts against the same budget. Lower the Thinking level in Settings, shrink the idea-dump or note, or switch to ${labelForModel("gemini-3.5-flash-lite")}.`;
     case "SAFETY":
       return `Gemini stopped on its safety filter and returned nothing. Filters are already off for ${labelForModel(modelId)}, so try rephrasing, or switch to a Gemma model in Settings (filtered differently).`;
     case "RECITATION":
@@ -491,7 +500,11 @@ async function callGemini(s, { system, user, expectJson, temperature, signal }) 
     if (expectJson && isGemma) {
       body.contents[0].parts.push({ text: "\n\nOutput format: a single JSON object and nothing else. No preamble, no plan, no bullet points, no commentary. A ```json fenced block is acceptable. Your entire reply must be the JSON." });
     }
-    if (expectJson) {
+    // A Thinking level picked in Settings applies to every call. On "auto",
+    // JSON calls get the cheapest level and prose keeps the model's default.
+    if (THINKING_LEVELS.includes(s.geminiThinking) && usesThinkingLevel(modelId)) {
+      generationConfig.thinkingConfig = { thinkingLevel: s.geminiThinking };
+    } else if (expectJson) {
       const thinking = jsonThinkingConfig(modelId);
       if (thinking) generationConfig.thinkingConfig = thinking;
     }

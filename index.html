@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>The Writer's Assistant — Dashboard</title>
-  <link rel="stylesheet" href="./css/shared.css?v=20261025" />
-  <link rel="stylesheet" href="./css/dashboard.css?v=20261025" />
+  <link rel="stylesheet" href="./css/shared.css?v=20261118" />
+  <link rel="stylesheet" href="./css/dashboard.css?v=20261118" />
 </head>
 <body>
   <header class="topbar">
@@ -13,7 +13,7 @@
     <div class="user-area" id="userArea"></div>
   </header>
   <script type="module">
-    import { mountSettingsButton } from "./js/settings.js?v=20261025";
+    import { mountSettingsButton } from "./js/settings.js?v=20261118";
     // Mount once auth area is populated by dashboard.js — observe.
     const ua = document.getElementById("userArea");
     new MutationObserver(() => {
@@ -48,6 +48,7 @@
     <section id="newProjectView" class="centered hidden">
       <h2>What's your story about?</h2>
       <p class="muted">A theme. A character. A fragment. Whatever you've got.</p>
+      <div id="mediumChoices" class="medium-choices medium-choices-inline" role="radiogroup" aria-label="Medium"></div>
       <textarea id="ideaDump" placeholder="Type or paste anything…" rows="10"></textarea>
       <div class="row">
         <input id="projectTitle" type="text" placeholder="Project title (required)" />
@@ -59,6 +60,6 @@
     </section>
   </main>
 
-  <script type="module" src="./js/dashboard.js?v=20261025"></script>
+  <script type="module" src="./js/dashboard.js?v=20261118"></script>
 </body>
 </html>

@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>The Writer's Assistant — Project</title>
-  <link rel="stylesheet" href="./css/shared.css?v=20261025" />
-  <link rel="stylesheet" href="./css/project.css?v=20261025" />
+  <link rel="stylesheet" href="./css/shared.css?v=20261118" />
+  <link rel="stylesheet" href="./css/project.css?v=20261118" />
   <script src="https://unpkg.com/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
 </head>
 <body>
@@ -30,7 +30,7 @@
     <div class="user-area" id="userArea"></div>
   </header>
   <script type="module">
-    import { mountSettingsButton } from "./js/settings.js?v=20261025";
+    import { mountSettingsButton } from "./js/settings.js?v=20261118";
     const ua = document.getElementById("userArea");
     new MutationObserver(() => {
       if (!ua.querySelector("button.settings-mounted") && ua.children.length > 0) {
@@ -224,6 +224,6 @@
     </section>
   </main>
 
-  <script type="module" src="./js/project.js?v=20261025"></script>
+  <script type="module" src="./js/project.js?v=20261118"></script>
 </body>
 </html>

@@ -3,12 +3,15 @@
 // genre, premise, narrative structure, and the writer's established terms
 // (e.g. "Curtain Fall" is the giant stormcloud, not a curtain falling).
 
-import { db } from "./shared.js?v=20261025";
+import { db } from "./shared.js?v=20261118";
 import {
   doc, updateDoc, serverTimestamp, collection, getDocs, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+import { MEDIA, MEDIA_LIST, getMediumProfile, mediumContextLines } from "./medium.js?v=20261118";
 
 export const DEFAULT_STORY_SETTINGS = {
+  medium: "",         // "" (not chosen yet) | "novel" | "film" — see medium.js
+  targetLength: 0,    // words (novel) or pages (film); 0 = the medium's typical length
   genre: "",
   premise: "",
   structure: "story-bible-default",
@@ -25,7 +28,9 @@ export const STRUCTURE_OPTIONS = [
   { id: "5-act",         label: "5-act (Exposition / Rising / Climax / Falling / Denouement)" },
   { id: "save-the-cat",  label: "Save the Cat (15 beats)" },
   { id: "heros-journey", label: "Hero's Journey" },
-  { id: "kishotenketsu", label: "Kishōtenketsu (Intro / Development / Twist / Conclusion)" }
+  { id: "kishotenketsu", label: "Kishōtenketsu (Intro / Development / Twist / Conclusion)" },
+  { id: "seven-point",   label: "7-Point (Hook / Turns / Pinches / Midpoint / Resolution)" },
+  { id: "eight-sequence", label: "8-Sequence (feature film, ~12–15 pages per sequence)" }
 ];
 
 // Map each structure preset to its main-story column labels.
@@ -38,7 +43,10 @@ export const STRUCTURE_COLUMNS = {
   "story-bible-default": ["Act I", "Act II", "Mid-Point", "Crisis", "Climax", "Act III"],
   "save-the-cat":  ["Setup", "Catalyst → Break Into Two", "Break Into Two → Midpoint", "Midpoint → All Is Lost", "All Is Lost → Finale", "Finale"],
   "heros-journey": ["Departure", "Initiation", "Return"],
-  "kishotenketsu": ["Ki (Intro)", "Shō (Development)", "Ten (Twist)", "Ketsu (Conclusion)"]
+  "kishotenketsu": ["Ki (Intro)", "Shō (Development)", "Ten (Twist)", "Ketsu (Conclusion)"],
+  "seven-point":   ["Hook → Plot Turn 1", "Pinch 1 → Midpoint", "Midpoint → Plot Turn 2", "Plot Turn 2 → Resolution"],
+  "eight-sequence": ["Seq 1: Status Quo", "Seq 2: Predicament", "Seq 3: First Obstacle", "Seq 4: First Culmination",
+                     "Seq 5: Subplot / Complication", "Seq 6: Main Culmination", "Seq 7: New Tension", "Seq 8: Resolution"]
 };
 
 // Per-column writing guidance for structures that have it. Keyed by
@@ -48,11 +56,11 @@ export const STRUCTURE_COLUMNS = {
 export const STRUCTURE_COLUMN_GUIDANCE = {
   "story-bible-default": {
     "prologue": {
-      description: "Introduces your film's tone through a scene not connected to the main plot.",
+      description: "Introduces your story's tone through a scene not connected to the main plot.",
       guidance: [
-        "Should exist outside the plot of the film.",
+        "Should exist outside the main plot.",
         "Doesn't need to necessarily involve the main characters.",
-        "Good in Action/Horror films — sets the tone quickly."
+        "Good in action and horror — sets the tone quickly."
       ]
     },
     "act-1": {
@@ -104,7 +112,7 @@ export const STRUCTURE_COLUMN_GUIDANCE = {
       ]
     },
     "epilogue": {
-      description: "A post-storyline scene that resolves a hanging thread, or introduces a new conflict for the next film/installment.",
+      description: "A post-storyline scene that resolves a hanging thread, or introduces a new conflict for the next installment.",
       guidance: [
         "What threads are not concluded?",
         "What needs to be appropriately teased for the next installment?"
@@ -124,10 +132,11 @@ export function getColumnsForProject(project) {
   const s = getStorySettings(project);
   const mainLabels = STRUCTURE_COLUMNS[s.structure] || STRUCTURE_COLUMNS["5-act"];
   const guidance = STRUCTURE_COLUMN_GUIDANCE[s.structure] || {};
+  const framing = getMediumProfile(project)?.framing || { prologue: "Prologue", epilogue: "Epilogue" };
   const cols = [];
   const proInfo = guidance["prologue"] || {};
   cols.push({
-    id: "prologue", label: "Prologue",
+    id: "prologue", label: framing.prologue,
     isPrologue: true, isMain: false, isEpilogue: false,
     description: proInfo.description || "",
     guidance: proInfo.guidance || []
@@ -144,7 +153,7 @@ export function getColumnsForProject(project) {
   });
   const epiInfo = guidance["epilogue"] || {};
   cols.push({
-    id: "epilogue", label: "Epilogue",
+    id: "epilogue", label: framing.epilogue,
     isPrologue: false, isMain: false, isEpilogue: true,
     description: epiInfo.description || "",
     guidance: epiInfo.guidance || []
@@ -247,6 +256,7 @@ export function buildProjectContext(project, opts = {}) {
   if (s.genre || s.premise || s.structure || s.voiceNotes || s.anchorConcepts.length) {
     lines.push("=== PROJECT CONTEXT ===");
     if (project?.title) lines.push(`Project: ${project.title}`);
+    lines.push(...mediumContextLines(project));
     if (s.genre)        lines.push(`Genre / setting: ${s.genre}`);
     if (s.premise)      lines.push(`Premise: ${s.premise}`);
     if (s.structure && s.structure !== "free") {
@@ -447,13 +457,24 @@ export function openStorySettingsModal(state, projectId, { onSaved } = {}) {
           <input id="ss-premise" type="text" value="${attr(s.premise)}" placeholder="e.g. A giant stormcloud covers the US for one year and the country adapts." />
         </label>
 
+        <div class="ss-row">
+          <label>Medium
+            <select id="ss-medium">
+              <option value=""${s.medium ? "" : " selected"}>Not chosen yet</option>
+              ${MEDIA_LIST.map(m => `<option value="${attr(m.id)}"${s.medium === m.id ? " selected" : ""}${m.available ? "" : " disabled"}>${esc(m.icon + " " + m.label + (m.available ? "" : " — coming soon"))}</option>`).join("")}
+            </select>
+          </label>
+          <label id="ss-target-row">
+            <span id="ss-target-label"></span>
+            <input id="ss-target" type="number" min="0" value="${s.targetLength > 0 ? attr(s.targetLength) : ""}" />
+          </label>
+        </div>
+
         <label>Story structure
-          <select id="ss-structure">
-            ${STRUCTURE_OPTIONS.map(o => `<option value="${attr(o.id)}"${s.structure === o.id ? " selected" : ""}>${esc(o.label)}</option>`).join("")}
-          </select>
+          <select id="ss-structure">${structureOptionsHtml(s.medium, s.structure)}</select>
         </label>
 
-        ${s.structure !== "story-bible-default" ? `
+        ${s.structure !== "story-bible-default" && !["seven-point", "eight-sequence"].includes(s.structure) ? `
           <div class="ss-migration">
             <p class="muted small"><strong>You're on the older "${esc(STRUCTURE_OPTIONS.find(o => o.id === s.structure)?.label || s.structure)}" structure.</strong></p>
             <p class="muted small">Click below to switch to the new "Story Bible default" structure and automatically move your scene and beat cards to the matching new columns (Mid-Point and Crisis will start empty — those are new concepts).</p>
@@ -492,6 +513,26 @@ export function openStorySettingsModal(state, projectId, { onSaved } = {}) {
   document.body.appendChild(overlay);
 
   let structureAtOpen = s.structure;
+
+  // Medium drives the target-length field and which structures are listed first.
+  const mediumSel = overlay.querySelector("#ss-medium");
+  const structSel = overlay.querySelector("#ss-structure");
+  const syncMedium = () => {
+    const m = MEDIA[mediumSel.value];
+    const len = m?.available ? m.length : null;
+    overlay.querySelector("#ss-target-row").style.display = len ? "" : "none";
+    if (len) {
+      overlay.querySelector("#ss-target-label").textContent = len.targetLabel;
+      const input = overlay.querySelector("#ss-target");
+      input.step = len.unit === "words" ? "1000" : "1";
+      input.placeholder = `typical: ${len.defaultTarget.toLocaleString()}`;
+    }
+    const cur = structSel.value;
+    structSel.innerHTML = structureOptionsHtml(mediumSel.value, cur);
+  };
+  mediumSel.addEventListener("change", syncMedium);
+  syncMedium();
+
   const listEl = overlay.querySelector("#ss-anchor-list");
   function addAnchorRow(term = "", definition = "") {
     const li = document.createElement("li");
@@ -559,7 +600,11 @@ export function openStorySettingsModal(state, projectId, { onSaved } = {}) {
         definition: row.querySelector(".ss-anchor-def").value.trim()
       }))
       .filter(a => a.term);
+    const target = parseFloat(overlay.querySelector("#ss-target").value);
     const next = {
+      ...getStorySettings(state.project), // keep fields this form doesn't show
+      medium:     mediumSel.value,
+      targetLength: Number.isFinite(target) && target > 0 ? target : 0,
       genre:      overlay.querySelector("#ss-genre").value.trim(),
       premise:    overlay.querySelector("#ss-premise").value.trim(),
       structure:  overlay.querySelector("#ss-structure").value,
@@ -593,6 +638,18 @@ export function openStorySettingsModal(state, projectId, { onSaved } = {}) {
       alert("Could not save story settings: " + (err.message || err));
     }
   });
+}
+
+// Structure <option>s: the medium's own structures first (in its preferred
+// order), then the rest under "Other structures". No medium = flat list.
+function structureOptionsHtml(mediumId, current) {
+  const opt = (o) => `<option value="${attr(o.id)}"${current === o.id ? " selected" : ""}>${esc(o.label)}</option>`;
+  const m = MEDIA[mediumId];
+  if (!m?.available || !m.structures) return STRUCTURE_OPTIONS.map(opt).join("");
+  const mine = m.structures.map(id => STRUCTURE_OPTIONS.find(o => o.id === id)).filter(Boolean);
+  const rest = STRUCTURE_OPTIONS.filter(o => !m.structures.includes(o.id));
+  return `<optgroup label="Common for a ${attr(m.noun)}">${mine.map(opt).join("")}</optgroup>`
+    + (rest.length ? `<optgroup label="Other structures">${rest.map(opt).join("")}</optgroup>` : "");
 }
 
 function esc(s) {

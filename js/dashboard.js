@@ -1,10 +1,11 @@
 import {
   auth, db, signIn, onAuthChange, renderUserArea, show, hide, formatDate
-} from "./shared.js?v=20261025";
-import { mountLlmConfigBanner } from "./settings.js?v=20261025";
+} from "./shared.js?v=20261118";
+import { mountLlmConfigBanner } from "./settings.js?v=20261118";
 import {
   collection, doc, getDocs, addDoc, query, where, orderBy, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+import { MEDIA, MEDIA_LIST } from "./medium.js?v=20261118";
 
 const els = {
   loading: document.getElementById("loading"),
@@ -20,7 +21,25 @@ const els = {
   projectTitle: document.getElementById("projectTitle"),
   projectList: document.getElementById("projectList"),
   emptyState: document.getElementById("emptyState"),
+  mediumChoices: document.getElementById("mediumChoices"),
 };
+
+// Medium picker on the new-project form. Required: the medium shapes the
+// structures, pacing and AI help from the very first extraction.
+let chosenMedium = "";
+function renderMediumChoices() {
+  els.mediumChoices.innerHTML = MEDIA_LIST.map(m => `
+    <button type="button" class="medium-choice${chosenMedium === m.id ? " selected" : ""}" role="radio"
+      aria-checked="${chosenMedium === m.id}" data-medium="${m.id}"${m.available ? "" : " disabled"}>
+      <span class="medium-icon">${m.icon}</span>
+      <strong>${escapeHtml(m.label)}</strong>
+      <span class="muted small">${escapeHtml(m.available ? m.blurb : "Coming soon")}</span>
+    </button>`).join("");
+  els.mediumChoices.querySelectorAll(".medium-choice:not([disabled])").forEach(b => b.addEventListener("click", () => {
+    chosenMedium = b.dataset.medium;
+    renderMediumChoices();
+  }));
+}
 
 let currentUser = null;
 
@@ -57,6 +76,8 @@ function goNewProject() {
   hide(els.signedOut);
   els.ideaDump.value = "";
   els.projectTitle.value = "";
+  chosenMedium = "";
+  renderMediumChoices();
   show(els.newProjectView);
   els.projectTitle.focus();
 }
@@ -101,6 +122,7 @@ async function loadProjects() {
     li.innerHTML = `
       <a class="project-link" href="./project.html?id=${encodeURIComponent(p.id)}">
         <h3>${escapeHtml(p.title || "(untitled)")}</h3>
+        ${MEDIA[p.storySettings?.medium] ? `<p class="medium-tag muted small">${MEDIA[p.storySettings.medium].icon} ${escapeHtml(MEDIA[p.storySettings.medium].label)}</p>` : ""}
         <p class="logline muted">${escapeHtml(p.logline || "")}</p>
         <p class="meta muted small">Updated ${formatDate(p.updatedAt)}</p>
       </a>
@@ -114,6 +136,10 @@ async function createProject() {
   const title = els.projectTitle.value.trim();
   if (!title) {
     alert("Give the project a title.");
+    return;
+  }
+  if (!chosenMedium) {
+    alert("Pick what you're writing — novel or film — first.");
     return;
   }
   const themeText = els.ideaDump.value.trim();
@@ -136,6 +162,7 @@ async function createProject() {
       logline: "",
       themeText,
       pillars: [],
+      storySettings: { medium: chosenMedium },
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       auditTrail: [],

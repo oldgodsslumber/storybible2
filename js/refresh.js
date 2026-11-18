@@ -7,13 +7,13 @@
 // since the last LLM generation, a Windows-style prompt asks
 // (Keep existing / Use new / Keep both) before overwriting.
 
-import { db } from "./shared.js?v=20261025";
+import { db } from "./shared.js?v=20261118";
 import {
   doc, updateDoc, collection, getDocs, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { callLLM, parseJsonLoose, isConfigured, callLLMJson } from "./llm.js?v=20261025";
-import { changesSinceLastRefresh } from "./audit.js?v=20261025";
-import { buildProjectContext } from "./story-settings.js?v=20261025";
+import { callLLM, parseJsonLoose, isConfigured, callLLMJson } from "./llm.js?v=20261118";
+import { changesSinceLastRefresh } from "./audit.js?v=20261118";
+import { buildProjectContext } from "./story-settings.js?v=20261118";
 
 const BATCH_SIZE = 12;
 
@@ -47,7 +47,7 @@ Return ONLY this JSON:
 export async function runGlobalRefresh({ state, projectId, onChanged }) {
   if (!isConfigured()) {
     if (confirm("No LLM provider configured. Open Settings?")) {
-      const { openSettingsModal } = await import("./settings.js?v=20261025");
+      const { openSettingsModal } = await import("./settings.js?v=20261118");
       openSettingsModal();
     }
     return;

@@ -6,8 +6,9 @@
 //      matched against the writer's beat cards, with one-click placeholders,
 //      a rough pacing check per column, and an optional LLM structure review.
 
-import { callLLMJson, wasTruncated } from "./llm.js?v=20261025";
-import { buildProjectContext, getColumnsForProject, getStorySettings, sortScenesByOutline } from "./story-settings.js?v=20261025";
+import { callLLMJson, wasTruncated } from "./llm.js?v=20261118";
+import { buildProjectContext, getColumnsForProject, getStorySettings, sortScenesByOutline } from "./story-settings.js?v=20261118";
+import { getMediumProfile, targetLength, sceneLength } from "./medium.js?v=20261118";
 
 // ---------------------------------------------------------------------------
 // Scene function
@@ -253,6 +254,24 @@ export const STRUCTURE_BEATS = {
     B("Ten — Twist", "act-3", 65, "An unexpected turn that recontextualises everything.", ["ten", "twist"]),
     B("Ketsu — Reconciliation", "act-4", 90, "Bring the elements together into a new understanding.", ["ketsu", "conclusion", "reconciliation"])
   ],
+  "seven-point": [
+    B("Hook", "act-1", 2, "The protagonist's starting state — usually the opposite of where they end.", ["opening", "starting state"]),
+    B("Plot Turn 1", "act-1", 22, "The call to adventure: new people, ideas or conflict move the protagonist from the hook toward the resolution.", ["plot point 1", "first plot point", "inciting incident", "lock-in", "turn 1"]),
+    B("Pinch 1", "act-2", 37, "Pressure: the antagonist applies force and the stakes become clear.", ["pinch point 1", "first pinch", "pinch point one"]),
+    B("Midpoint", "act-2", 50, "The protagonist moves from reacting to acting.", ["mid-point", "midpoint reversal"]),
+    B("Pinch 2", "act-3", 62, "More pressure: the plan fails, a mentor falls — the jaws of defeat.", ["pinch point 2", "second pinch", "pinch point two", "all is lost"]),
+    B("Plot Turn 2", "act-3", 80, "The protagonist gets the last piece they need to resolve the story.", ["plot point 2", "second plot point", "turn 2"]),
+    B("Resolution", "act-4", 95, "The climax and the end state — the payoff of everything before.", ["climax", "denouement", "dénouement", "ending"])
+  ],
+  "eight-sequence": [
+    B("Inciting Incident", "act-1", 10, "The disruption that ends the status quo (end of sequence 1).", ["catalyst", "point of attack", "inciting"]),
+    B("Lock-in", "act-2", 25, "The protagonist is locked into the predicament — the end of Act 1.", ["plot point 1", "first plot point", "break into two", "end of act 1", "point of no return"]),
+    B("First Culmination", "act-4", 50, "The midpoint: a glimpse of the final outcome, or its reverse.", ["midpoint", "mid-point"]),
+    B("Main Culmination", "act-6", 75, "The end of Act 2: the main tension resolves, often in a low point.", ["plot point 2", "second plot point", "all is lost", "end of act 2"]),
+    B("Twist", "act-7", 85, "A new tension or a reversal that sets up the final push.", ["new tension", "reversal"]),
+    B("Climax", "act-8", 92, "The final confrontation.", ["finale", "showdown"]),
+    B("Resolution", "act-8", 98, "The new status quo.", ["denouement", "dénouement", "final image"])
+  ],
   "free": []
 };
 
@@ -263,7 +282,9 @@ const COLUMN_WEIGHTS = {
   "5-act":               { "act-1": 20, "act-2": 20, "act-3": 20, "act-4": 20, "act-5": 20 },
   "save-the-cat":        { "act-1": 10, "act-2": 10, "act-3": 30, "act-4": 25, "act-5": 5, "act-6": 20 },
   "heros-journey":       { "act-1": 25, "act-2": 50, "act-3": 25 },
-  "kishotenketsu":       { "act-1": 25, "act-2": 25, "act-3": 25, "act-4": 25 }
+  "kishotenketsu":       { "act-1": 25, "act-2": 25, "act-3": 25, "act-4": 25 },
+  "seven-point":         { "act-1": 25, "act-2": 25, "act-3": 30, "act-4": 20 },
+  "eight-sequence":      { "act-1": 12, "act-2": 13, "act-3": 12, "act-4": 13, "act-5": 12, "act-6": 13, "act-7": 12, "act-8": 13 }
 };
 
 // ---------------------------------------------------------------------------
@@ -367,14 +388,20 @@ export function structureStatus(state) {
   const matchedIds = new Set(items.filter(i => i.card).map(i => i.card.id));
   const strayPlaceholders = beats.filter(b => b.fields?.placeholder && !matchedIds.has(b.id));
 
-  // Pacing: scenes per main column vs the rough guide.
+  // Pacing: scenes per main column vs the rough guide — or, when the medium
+  // has a length unit and scenes carry estimates, share of the total length.
+  // Scenes without an estimate count as the average of those that have one.
   const weights = COLUMN_WEIGHTS[structure] || null;
   const mainCols = columns.filter(c => c.isMain);
   const inMain = scenes.filter(s => mainCols.some(c => c.id === s.fields?.columnId));
   const total = inMain.length;
+  const length = lengthModel(state);
+  const sizeOf = length ? length.sizeOf : () => 1;
+  const totalSize = inMain.reduce((n, s) => n + sizeOf(s), 0);
   const pacing = weights ? mainCols.map(c => {
-    const count = inMain.filter(s => s.fields?.columnId === c.id).length;
-    const share = total ? (count / total) * 100 : 0;
+    const colScenes = inMain.filter(s => s.fields?.columnId === c.id);
+    const count = colScenes.length;
+    const share = totalSize ? (colScenes.reduce((n, s) => n + sizeOf(s), 0) / totalSize) * 100 : 0;
     const guide = weights[c.id] ?? 0;
     const expectedCount = (guide / 100) * total;
     let flag = "";
@@ -386,14 +413,63 @@ export function structureStatus(state) {
     return { id: c.id, label: c.label, count, share, guide, flag };
   }) : [];
 
+  // Where each beat should land, and (with length estimates) where it does.
+  if (length) {
+    const pos = beatPositions(state, length);
+    const base = length.target || length.total;
+    for (const it of items) {
+      it.expectedAt = length.unit.at((it.at / 100) * base);
+      const actual = it.card ? pos.get(it.card.id) : undefined;
+      if (actual !== undefined && length.known) {
+        it.actualAt = length.unit.at(actual);
+        // Off by more than an eighth of the story is worth a look.
+        it.offPace = Math.abs(actual - (it.at / 100) * base) > base * 0.125;
+      }
+    }
+  }
+
   const written = items.filter(i => i.card && !i.placeholder).length;
   const placeholders = items.filter(i => i.card && i.placeholder).length;
-  return { structure, items, found: written + placeholders, written, placeholders, pacing, sceneTotal: total, strayPlaceholders };
+  return {
+    structure, items, found: written + placeholders, written, placeholders, pacing, sceneTotal: total, strayPlaceholders,
+    length: length ? { unit: length.unit, known: length.known, total: length.total, target: length.target } : null
+  };
+}
+
+// Length model for the medium (words / pages), or null when the project has
+// no medium with a length unit. `known` = how many scenes carry an estimate.
+function lengthModel(state) {
+  const m = getMediumProfile(state.project);
+  if (!m?.length) return null;
+  const all = [...state.cards.values()].filter(c => c.type === "scene" && !c.archived);
+  const estimated = all.filter(s => sceneLength(s) > 0);
+  const avg = estimated.length ? estimated.reduce((n, s) => n + sceneLength(s), 0) / estimated.length : 0;
+  const sizeOf = estimated.length ? (s) => sceneLength(s) || avg : () => 1;
+  return {
+    unit: m.length,
+    known: estimated.length,
+    sizeOf,
+    total: estimated.length ? all.reduce((n, s) => n + sizeOf(s), 0) : 0,
+    target: targetLength(state.project)
+  };
+}
+
+// Running length (in the medium's unit) at which each beat card sits in
+// reading order: the length of every scene before it.
+function beatPositions(state, length) {
+  const outline = [...state.cards.values()].filter(c => (c.type === "scene" || c.type === "beat") && !c.archived);
+  const pos = new Map();
+  let run = 0;
+  for (const c of sortScenesByOutline(outline, state.project)) {
+    if (c.type === "beat") pos.set(c.id, run);
+    else run += length.sizeOf(c);
+  }
+  return pos;
 }
 
 // Whether the panel has anything for the writer to act on.
 export function structureNeedsAttention(st) {
-  return st.items.some(i => !i.card || i.placeholder || i.misplaced) || st.pacing.some(p => p.flag) || st.strayPlaceholders.length > 0;
+  return st.items.some(i => !i.card || i.placeholder || i.misplaced || i.offPace) || st.pacing.some(p => p.flag) || st.strayPlaceholders.length > 0;
 }
 
 // The Outline's checklist panel. Side effects are delegated to project.js.
@@ -427,9 +503,9 @@ export function renderStructurePanel(state, opts) {
             <li class="sp-beat ${it.card ? (it.placeholder ? "sp-placeholder" : "sp-found") : "sp-missing"}">
               <span class="sp-mark" title="${it.card ? (it.placeholder ? "Placeholder — not written yet" : "Present") : "Missing"}">${it.card ? (it.placeholder ? "◌" : "✓") : "○"}</span>
               <div class="sp-beat-main">
-                <div><strong>${esc(it.name)}</strong> <span class="muted small">~${it.at}% · ${esc(it.columnLabel)}</span></div>
+                <div><strong>${esc(it.name)}</strong> <span class="muted small">~${it.at}%${it.expectedAt ? ` (${esc(it.expectedAt)})` : ""} · ${esc(it.columnLabel)}</span></div>
                 ${!it.card || it.placeholder ? `<div class="muted small">${esc(it.description)}</div>` : ""}
-                ${it.card ? `<div class="small">→ <a href="#" class="sp-open" data-card="${esc(it.card.id)}">${esc(it.card.title)}</a>${it.placeholder ? ` <span class="muted small">placeholder — open it and write the beat</span>` : ""}${it.misplaced ? ` <span class="sp-warn">sits in ${esc(it.cardColumnLabel)} — usually ${esc(it.columnLabel)}</span>` : ""}</div>` : ""}
+                ${it.card ? `<div class="small">→ <a href="#" class="sp-open" data-card="${esc(it.card.id)}">${esc(it.card.title)}</a>${it.placeholder ? ` <span class="muted small">placeholder — open it and write the beat</span>` : ""}${it.misplaced ? ` <span class="sp-warn">sits in ${esc(it.cardColumnLabel)} — usually ${esc(it.columnLabel)}</span>` : ""}${it.actualAt ? ` <span class="${it.offPace ? "sp-warn" : "muted small"}">lands ${esc(it.actualAt)}</span>` : ""}</div>` : ""}
                 ${it.sceneHint ? `<div class="small sp-hint">Scene <a href="#" class="sp-open" data-card="${esc(it.sceneHint.id)}">${esc(it.sceneHint.title)}</a> looks like this beat — "+ Add" will link it.</div>` : ""}
               </div>
               ${it.card ? "" : `<button type="button" class="ghost small sp-add" data-i="${i}"${dis}>+ Add</button>`}
@@ -441,7 +517,10 @@ export function renderStructurePanel(state, opts) {
           <button type="button" class="ghost small sp-archive-stray"${dis}>Archive them</button></p>` : ""}
       </div>
       <div class="sp-side">
-        <h4>Pacing <span class="muted small">— scenes per act column</span></h4>
+        <h4>Pacing <span class="muted small">— ${st.length?.known ? `${esc(st.length.unit.unit)} per act column` : "scenes per act column"}</span></h4>
+        ${st.length ? `<p class="muted small">${st.length.known
+          ? `Estimated total ${esc(st.length.unit.format(st.length.total))} of ${esc(st.length.unit.format(st.length.target))} target${st.length.known < st.sceneTotal ? ` · ${st.length.known} scene${st.length.known === 1 ? "" : "s"} estimated, the rest counted at the average` : ""}.`
+          : `Add an estimated length to scenes to pace by ${esc(st.length.unit.unit)} and see where each beat lands.`}</p>` : ""}
         ${st.sceneTotal ? `
           <ul class="sp-pacing">
             ${st.pacing.map(p => `
@@ -452,7 +531,7 @@ export function renderStructurePanel(state, opts) {
                 ${p.flag ? `<span class="sp-warn">${p.flag}</span>` : ""}
               </li>`).join("")}
           </ul>
-          <p class="muted small">Bar = your share of scenes · tick = a rough guide for this structure.${st.sceneTotal < 6 ? " Flags appear once 6+ scenes sit in the act columns." : ""}</p>
+          <p class="muted small">Bar = your share of ${st.length?.known ? esc(st.length.unit.unit) : "scenes"} · tick = a rough guide for this structure.${st.sceneTotal < 6 ? " Flags appear once 6+ scenes sit in the act columns." : ""}</p>
         ` : `<p class="muted small">No scenes in the act columns yet.</p>`}
         <button type="button" class="ghost small sp-ai"${dis}>✨ Check structure with AI</button>
         <div class="sp-ai-out">${ai ? renderAiResult(ai, esc, structureLabel) : ""}</div>

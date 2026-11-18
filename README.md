@@ -68,6 +68,17 @@ This repo implements **M1 + M2 + M3 + M4 + M5** of the spec (`Story_Bible_App_Sp
 - **What each scene does** — every scene card has POV, goal, conflict, outcome, what changes, and a value shift (▲ ends better / ▼ worse / ⇅ reversal / ● nothing changes). Fill them by hand, per scene ("✨ Fill empty fields from the description"), or for every scene at once ("✨ Analyze what each scene does" on the Outline). The LLM only fills empty fields. Outline cards show the POV and shift, and flag "nothing changes" scenes; reviews and the synopsis use these fields.
 - **Structure checklist** — top of the Outline. Lists the beats the project's structure expects (6 for the Story Bible default, 15 for Save the Cat, 12 for the Hero's Journey, …), ticks off beat cards that match by structure position or title, adds missing beats as placeholders in the right column, shows scenes-per-column against a rough pacing guide, and can ask the LLM to review the outline for missing or weak turns.
 
+## Narrative types (js/medium.js)
+
+Each project has a **medium** (Story settings, or the picker on the new-project form). Projects made before this are asked once when opened. The plan for all four media is in `docs/narrative-types-plan.md`.
+
+- **Novel** — optional chapter on each scene (the Outline shows chapter dividers and flags POV changes inside a chapter), pacing in words, 7-Point structure, synopsis written as a one-page submission synopsis.
+- **Film** — INT/EXT and time of day on each scene (the Outline shows a scene heading), pacing in script pages, 8-Sequence structure, synopsis written as logline + treatment.
+- **Both** — an estimated length per scene; once scenes have estimates the structure checklist paces by length and shows where each beat should land and where it does.
+- **TV series** and **video game** are coming (phases 2 and 3).
+
+The medium's guidance goes into every AI prompt through the project context.
+
 ## Stretch goals not implemented
 
 The spec lists these as stretch goals (section 15) — not built:

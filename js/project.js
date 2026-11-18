@@ -1,31 +1,35 @@
 import {
   auth, db, onAuthChange, renderUserArea, show, hide, blankFieldsForType, CARD_TYPES, KANBAN_STAGES, openBusyOverlay
-} from "./shared.js?v=20261025";
+} from "./shared.js?v=20261118";
 import {
   doc, getDoc, getDocs, collection, addDoc, updateDoc, deleteDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { isConfigured, getSettings } from "./llm.js?v=20261025";
-import { openSettingsModal } from "./settings.js?v=20261025";
+import { isConfigured, getSettings } from "./llm.js?v=20261118";
+import { openSettingsModal } from "./settings.js?v=20261118";
 import {
   extractFromIdeaDump, parseSidePanelNote, runGapAnalysis,
   openApprovalModal, openWizardModal
-} from "./extraction.js?v=20261025";
-import { logAudit, staleImpact, changesSinceLastRefresh } from "./audit.js?v=20261025";
-import { runGlobalRefresh, provideStateRef } from "./refresh.js?v=20261025";
+} from "./extraction.js?v=20261118";
+import { logAudit, staleImpact, changesSinceLastRefresh } from "./audit.js?v=20261118";
+import { runGlobalRefresh, provideStateRef } from "./refresh.js?v=20261118";
 import {
   renderReviewPanel, generateScene, insertGeneratedScene,
   suggestTraits, applyTraitSuggestions, openTraitSuggestModal,
   openSceneProposalModal,
   reviewCharacterArc, persistCharacterArcReview
-} from "./review.js?v=20261025";
-import { renderOracle } from "./oracle.js?v=20261025";
-import { openStorySettingsModal, getColumnsForProject, defaultColumnId, resolveColumnHint, sortScenesByOutline, STRUCTURE_OPTIONS } from "./story-settings.js?v=20261025";
-import { provideExtractionStateRef } from "./extraction.js?v=20261025";
+} from "./review.js?v=20261118";
+import { renderOracle } from "./oracle.js?v=20261118";
+import { openStorySettingsModal, getColumnsForProject, defaultColumnId, resolveColumnHint, sortScenesByOutline, STRUCTURE_OPTIONS } from "./story-settings.js?v=20261118";
+import { provideExtractionStateRef } from "./extraction.js?v=20261118";
 import {
   sceneFunctionEditorHtml, sceneFunctionBadgesHtml, analyzeSceneFunctions, hasSceneFunction,
   SCENE_FUNCTION_FIELDS, valueShiftInfo, renderStructurePanel, reviewStructure, structureStatus
-} from "./planning.js?v=20261025";
-import { mountLlmConfigBanner } from "./settings.js?v=20261025";
+} from "./planning.js?v=20261118";
+import { mountLlmConfigBanner } from "./settings.js?v=20261118";
+import {
+  getMediumProfile, mediumSceneEditorHtml, mediumSceneChipsHtml,
+  chapterKey, chapterPovConflicts, openMediumPicker
+} from "./medium.js?v=20261118";
 
 const REFRESH_NUDGE_THRESHOLD = 60;
 
@@ -283,6 +287,7 @@ els.storySettingsBtn?.addEventListener("click", () => {
   openStorySettingsModal(state, projectId, {
     onSaved: () => {
       console.log("[story-settings] saved");
+      renderMediumBadge();
       // Re-render whichever view is active so a structure change shows up
       // immediately (especially relevant after a remap).
       refreshActiveView();
@@ -431,13 +436,66 @@ async function loadProject() {
     themeTextChars: (state.project.themeText || "").length,
     auditEntries: (state.project.auditTrail || []).length
   });
+  renderMediumBadge();
   if (isNewProject) {
     history.replaceState({}, "", `./project.html?id=${encodeURIComponent(projectId)}`);
     await maybeRunIdeaDumpExtraction();
+  } else {
+    askForMediumIfUnset();
   }
   // Surface any approved items that failed to save on a previous visit so the
   // writer can retry or download them instead of silently losing the work.
   renderRecoveryBanner();
+}
+
+// "📖 Novel" next to the project title; click it to open Story settings.
+function renderMediumBadge() {
+  document.getElementById("mediumBadge")?.remove();
+  const m = getMediumProfile(state.project);
+  if (!m || !els.projectTitle) return;
+  const b = document.createElement("button");
+  b.id = "mediumBadge";
+  b.type = "button";
+  b.className = "ghost small medium-badge";
+  b.title = "Medium — change it in Story settings";
+  b.textContent = `${m.icon} ${m.label}`;
+  b.addEventListener("click", () => els.storySettingsBtn?.click());
+  els.projectTitle.after(b);
+}
+
+// Projects made before media existed have no medium. Ask once per project
+// (per browser session when the writer picks "Ask me later").
+function askForMediumIfUnset() {
+  if (state.project?.storySettings?.medium) return;
+  const laterKey = "medium.askLater." + projectId;
+  try { if (sessionStorage.getItem(laterKey)) return; } catch {}
+  openMediumPicker({
+    esc,
+    title: "What kind of project is this?",
+    intro: "The app now tailors its structures, pacing and AI help to the medium. Nothing in your project changes except the labels and advice — you can switch any time in 📖 Story settings.",
+    onPick: async (medium) => {
+      try {
+        await setProjectMedium(medium);
+      } catch (err) {
+        alert("Couldn't save the medium: " + (err?.message || err));
+      }
+    },
+    onLater: () => { try { sessionStorage.setItem(laterKey, "1"); } catch {} }
+  });
+}
+
+async function setProjectMedium(medium) {
+  const old = state.project.storySettings?.medium || "";
+  await updateDoc(doc(db, "users", state.user.uid, "projects", projectId), {
+    "storySettings.medium": medium,
+    updatedAt: serverTimestamp()
+  });
+  state.project.storySettings = { ...(state.project.storySettings || {}), medium };
+  await logAudit(state.user.uid, projectId, [{
+    entityType: "project", entityId: projectId, field: "storySettings.medium", oldValue: old, newValue: medium
+  }], state.project);
+  renderMediumBadge();
+  refreshActiveView();
 }
 
 async function maybeRunIdeaDumpExtraction() {
@@ -2250,6 +2308,7 @@ function renderEditor(card) {
     typeSpecific = `
       <label>Short Description <textarea data-field="shortDescription" rows="2">${esc(f.shortDescription)}</textarea></label>
       <label>Long Description <textarea data-field="longDescription" rows="5">${esc(f.longDescription)}</textarea></label>
+      ${mediumSceneEditorHtml(card, state.project, esc)}
       ${sceneFunctionEditorHtml(card, state, esc)}
       ${renderBeatPickerForScene(card)}
       ${renderMultiTagPicker(card, "characterIds", "Characters", "character")}
@@ -2697,9 +2756,15 @@ async function mergeCards(sourceId, targetId) {
     }
   }
   // Single values: keep the target's, fill only if it has none.
-  for (const f of ["age", "valueShift", "povCharacterId"]) {
+  for (const f of ["age", "valueShift", "povCharacterId", "chapter", "intExt", "timeOfDay"]) {
     const src = String(srcFields[f] ?? "").trim();
     if (src && !String(tgtFields[f] ?? "").trim()) { tgtFields[f] = src; updates[`fields.${f}`] = src; }
+  }
+  // Estimated lengths add up: two merged scenes are as long as both were.
+  if (Number(srcFields.estLength) > 0) {
+    const sum = (Number(tgtFields.estLength) || 0) + Number(srcFields.estLength);
+    tgtFields.estLength = sum;
+    updates["fields.estLength"] = sum;
   }
   for (const f of arrayFields) {
     const src = Array.isArray(srcFields[f]) ? srcFields[f] : [];
@@ -3034,7 +3099,16 @@ function renderColumn(col, cards) {
     renderOutline();
   });
 
+  // Novel chapters: a divider wherever the chapter changes down the column.
+  const chapters = getMediumProfile(state.project)?.id === "novel";
+  const povConflicts = chapters ? outlinePovConflicts() : new Map();
+  let lastChapter = null;
   for (const card of cards) {
+    if (chapters && card.type === "scene") {
+      const key = chapterKey(card.fields?.chapter);
+      if (key && key !== lastChapter) body.appendChild(renderChapterDivider(card.fields.chapter, povConflicts.get(key)));
+      if (key) lastChapter = key;
+    }
     body.appendChild(renderOutlineCard(card, col));
   }
 
@@ -3064,6 +3138,21 @@ function renderColumn(col, cards) {
   return colEl;
 }
 
+function outlinePovConflicts() {
+  return chapterPovConflicts([...state.cards.values()].filter(c => c.type === "scene" && !c.archived));
+}
+
+function renderChapterDivider(label, conflictPovIds) {
+  const el = document.createElement("div");
+  el.className = "chapter-divider";
+  const raw = String(label).trim();
+  const text = /^ch(apter)?\b/i.test(raw) ? raw : `Chapter ${raw}`;
+  const names = (conflictPovIds || []).map(id => state.cards.get(id)?.title || "?");
+  el.innerHTML = `<span>${esc(text)}</span>${names.length
+    ? ` <span class="sp-warn" title="A chapter usually stays with one point-of-view character">POV changes in this chapter: ${esc(names.join(", "))}</span>` : ""}`;
+  return el;
+}
+
 function renderOutlineCard(card, col) {
   const el = document.createElement("article");
   el.className = "outline-card outline-card-" + card.type;
@@ -3083,7 +3172,7 @@ function renderOutlineCard(card, col) {
       ${stale}
     </div>
     ${sub ? `<p class="outline-card-sub muted small">${esc(sub)}</p>` : ""}
-    ${card.type === "scene" ? sceneFunctionBadgesHtml(card, state, esc) : ""}
+    ${card.type === "scene" ? sceneFunctionBadgesHtml(card, state, esc) + mediumSceneChipsHtml(card, state, esc) : ""}
   `;
   if (card.type === "scene" && card.fields?.valueShift === "flat") el.classList.add("sf-flat");
   el.addEventListener("click", e => {

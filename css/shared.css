@@ -684,3 +684,30 @@ body.refresh-locked main { pointer-events: none; filter: grayscale(0.4) brightne
   font-size: 13px;
   z-index: 1000;
 }
+
+/* Medium picker (new-project form + "What kind of project is this?") */
+.medium-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+.medium-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 12px 14px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  color: var(--text);
+  cursor: pointer;
+}
+.medium-choice:hover:not([disabled]) { border-color: var(--accent); }
+.medium-choice.selected { border-color: var(--accent); background: rgba(122,156,255,0.12); box-shadow: 0 0 0 1px var(--accent) inset; }
+.medium-choice[disabled] { opacity: 0.45; cursor: not-allowed; }
+.medium-icon { font-size: 22px; line-height: 1.2; }
+.medium-choices-inline { width: 100%; max-width: 720px; }
+.medium-picker-modal { max-width: 640px; }

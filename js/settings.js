@@ -1,5 +1,5 @@
 // Settings modal — open from any page. Persists LLM config to localStorage.
-import { getSettings, saveSettings, callLLM, isConfigured, GEMINI_MODELS, listGeminiModels, GEMINI_FALLBACK_CHAIN, getDailyUsage, GEMINI_DEFAULT_MODEL, GEMINI_MODEL_INFO, isGemmaModel, callLLMDetailed, isRetiredOrAliasModel, normalizeModelId } from "./llm.js?v=20261025";
+import { getSettings, saveSettings, callLLM, isConfigured, GEMINI_MODELS, listGeminiModels, GEMINI_FALLBACK_CHAIN, getDailyUsage, GEMINI_DEFAULT_MODEL, GEMINI_MODEL_INFO, isGemmaModel, callLLMDetailed, isRetiredOrAliasModel, normalizeModelId, usesThinkingLevel } from "./llm.js?v=20261118";
 
 const NOTICE_KEY = "storybible.llm.notice.acknowledged";
 const FIRST_VISIT_PROMPT_KEY = "storybible.llm.config-prompt.shown";
@@ -66,6 +66,16 @@ export function openSettingsModal() {
             </div>
             <div id="modelListResults" class="model-list-results"></div>
             <p class="muted small" style="margin-top:4px;">Models current as of October 2026. Google retires and renames models often — "List models my key can use" asks Google directly. Gemini 4 Argon and 3.1 Pro need a key on a paid project.</p>
+          </label>
+          <label id="thinkingRow">Thinking
+            <select id="geminiThinking">
+              ${[["auto", "Auto — quick for card extraction, model default for writing (recommended)"],
+                 ["low", "Low — fastest"],
+                 ["medium", "Medium — balanced"],
+                 ["high", "High — slowest, deepest"]]
+                .map(([v, l]) => `<option value="${v}"${s.geminiThinking === v ? " selected" : ""}>${esc(l)}</option>`).join("")}
+            </select>
+            <span class="muted small">How long Gemini reasons before it writes. Gemini models ignore temperature now, so this is the setting that trades speed for care. Higher levels are slower, and the hidden thinking counts against the reply's length limit.</span>
           </label>
           <div class="provider-help" id="geminiChainStatus">
             <strong>Today's requests from this browser</strong>
@@ -155,6 +165,7 @@ export function openSettingsModal() {
   const syncTemperature = () => {
     const usesTemp = providerSel.value === "ooba" || (providerSel.value === "gemini" && isGemmaModel(currentModel()));
     overlay.querySelector("#temperatureRow").style.display = usesTemp ? "" : "none";
+    overlay.querySelector("#thinkingRow").style.display = usesThinkingLevel(currentModel()) ? "" : "none";
   };
   modelSel.addEventListener("change", () => {
     const custom = modelSel.value === "__custom";
@@ -207,6 +218,7 @@ export function openSettingsModal() {
         const typed = overlay.querySelector("#geminiModel").value.trim();
         return (sel === "__custom" ? typed : sel) || GEMINI_DEFAULT_MODEL;
       })(),
+      geminiThinking: overlay.querySelector("#geminiThinking").value,
       oobaBaseUrl: overlay.querySelector("#oobaBaseUrl").value.trim() || "http://127.0.0.1:5000",
       oobaModel: overlay.querySelector("#oobaModel").value.trim() || "local-model",
       temperature: (() => {
